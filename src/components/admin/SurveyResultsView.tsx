@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import clsx from "clsx";
-import { AWARENESS_PATH_OPTIONS, SURVEY_LIKERT_QUESTIONS } from "@/lib/constants";
+import {
+  AWARENESS_PATH_OPTIONS,
+  SURVEY_LIKERT_QUESTIONS,
+  SURVEY_QUESTIONS,
+  surveyQuestionLabel,
+} from "@/lib/constants";
+import type { SurveyQuestionKey } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { Button } from "@/components/ui/Button";
@@ -97,12 +103,11 @@ export function SurveyResultsView({
       [
         { header: "참여 프로그램", accessor: (r: SurveyResponse) => r.workshop },
         { header: "인지경로", accessor: (r: SurveyResponse) => r.awareness_path },
-        { header: "Q1", accessor: (r: SurveyResponse) => r.q1 },
-        { header: "Q2", accessor: (r: SurveyResponse) => r.q2 },
-        { header: "Q3", accessor: (r: SurveyResponse) => r.q3 },
-        { header: "Q4", accessor: (r: SurveyResponse) => r.q4 },
-        { header: "Q5", accessor: (r: SurveyResponse) => r.q5 },
-        { header: "개방형 답변(Q6)", accessor: (r: SurveyResponse) => r.q6 },
+        // 원천데이터만으로 해석이 가능하도록 헤더에 문항 전문을 그대로 싣는다.
+        ...SURVEY_QUESTIONS.map((q) => ({
+          header: surveyQuestionLabel(q),
+          accessor: (r: SurveyResponse) => r[q.key],
+        })),
         { header: "제출일시", accessor: (r: SurveyResponse) => formatDateTime(r.submitted_at) },
       ],
       `LAWdata_원천데이터_${new Date().toISOString().slice(0, 10)}.csv`
@@ -147,12 +152,10 @@ export function SurveyResultsView({
         <h2 className="text-base font-bold text-brand sm:text-lg">5점 척도 문항 평균</h2>
         <p className="mt-1 text-xs text-slate-500">문항별 평균 점수(5점 만점)입니다.</p>
         <ul className="mt-4 flex flex-col gap-4">
-          {likertStats.map((stat, idx) => (
+          {likertStats.map((stat) => (
             <li key={stat.key} className="flex flex-col gap-1">
               <div className="flex items-start justify-between gap-2 text-sm">
-                <span className="font-medium text-slate-700">
-                  Q{idx + 1}. {stat.text}
-                </span>
+                <span className="font-medium text-slate-700">{surveyQuestionLabel(stat)}</span>
                 <span className="whitespace-nowrap font-bold text-brand">
                   {stat.avg.toFixed(1)} / 5.0
                 </span>
@@ -186,7 +189,7 @@ export function SurveyResultsView({
       <section className="flex flex-col gap-3">
         <h2 className="text-base font-bold text-brand sm:text-lg">원천 데이터</h2>
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-card">
-          <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1500px] border-collapse text-left text-sm">
             <caption className="sr-only">만족도조사 원천 응답 데이터 테이블</caption>
             <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
               <tr>
@@ -196,24 +199,19 @@ export function SurveyResultsView({
                 <th scope="col" className="px-3 py-3">
                   인지경로
                 </th>
-                <th scope="col" className="px-3 py-3">
-                  Q1
-                </th>
-                <th scope="col" className="px-3 py-3">
-                  Q2
-                </th>
-                <th scope="col" className="px-3 py-3">
-                  Q3
-                </th>
-                <th scope="col" className="px-3 py-3">
-                  Q4
-                </th>
-                <th scope="col" className="px-3 py-3">
-                  Q5
-                </th>
-                <th scope="col" className="px-3 py-3">
-                  개방형 답변(Q6)
-                </th>
+                {SURVEY_QUESTIONS.map((q) => (
+                  <th
+                    key={q.key}
+                    scope="col"
+                    title={q.text}
+                    className="min-w-[9rem] whitespace-normal px-3 py-3 align-bottom"
+                  >
+                    {q.key.toUpperCase()}
+                    <span className="mt-1 block font-normal leading-snug text-slate-500">
+                      {q.text}
+                    </span>
+                  </th>
+                ))}
                 <th scope="col" className="px-3 py-3">
                   제출일시
                 </th>
@@ -224,14 +222,17 @@ export function SurveyResultsView({
                 <tr key={r.id} className={clsx("align-top")}>
                   <td className="px-3 py-3 text-slate-700">{r.workshop}</td>
                   <td className="px-3 py-3 text-slate-700">{r.awareness_path}</td>
-                  <td className="px-3 py-3 text-slate-700">{r.q1}</td>
-                  <td className="px-3 py-3 text-slate-700">{r.q2}</td>
-                  <td className="px-3 py-3 text-slate-700">{r.q3}</td>
-                  <td className="px-3 py-3 text-slate-700">{r.q4}</td>
-                  <td className="px-3 py-3 text-slate-700">{r.q5}</td>
-                  <td className="max-w-xs px-3 py-3 text-slate-700">
-                    <OpenAnswerCell text={r.q6 ?? ""} />
-                  </td>
+                  {SURVEY_QUESTIONS.map((q) =>
+                    q.key === "q6" ? (
+                      <td key={q.key} className="max-w-xs px-3 py-3 text-slate-700">
+                        <OpenAnswerCell text={r.q6 ?? ""} />
+                      </td>
+                    ) : (
+                      <td key={q.key} className="px-3 py-3 text-slate-700">
+                        {r[q.key as SurveyQuestionKey]}
+                      </td>
+                    )
+                  )}
                   <td className="whitespace-nowrap px-3 py-3 text-slate-700">
                     {formatDateTime(r.submitted_at)}
                   </td>
@@ -239,7 +240,10 @@ export function SurveyResultsView({
               ))}
               {responses.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <td
+                    colSpan={SURVEY_QUESTIONS.length + 3}
+                    className="px-3 py-8 text-center text-sm text-slate-500"
+                  >
                     아직 등록된 만족도조사 응답이 없습니다.
                   </td>
                 </tr>

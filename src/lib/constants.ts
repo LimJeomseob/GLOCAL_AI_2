@@ -431,6 +431,30 @@ export const SURVEY_LIKERT_QUESTIONS = [
   { key: "q5", required: true, text: "향후 유사한 특강이 있다면 참여(추천)할 의향이 있다." },
 ] as const;
 
+/** 만족도조사 탭 - 개방형 1문항 (§5.4) */
+export const SURVEY_OPEN_QUESTION = {
+  key: "q6",
+  required: false,
+  text: "기타 의견(자유롭게 작성해 주세요)",
+} as const;
+
+/**
+ * 원천데이터(LAWdata)의 q1~q6 컬럼과 1:1로 대응하는 전체 문항 배열.
+ * 관리자 화면 표 헤더 / CSV 헤더가 이 배열을 기준으로 문항 전문을 표시한다.
+ */
+export const SURVEY_QUESTIONS = [...SURVEY_LIKERT_QUESTIONS, SURVEY_OPEN_QUESTION] as const;
+
+export type SurveyQuestionKey = (typeof SURVEY_QUESTIONS)[number]["key"];
+
+/**
+ * "Q1. 특강 내용은 사전 안내된 목적·주제에 부합하였다." 형태의 문항 라벨.
+ * 번호는 배열 인덱스가 아니라 key(q1~q6)에서 파생하므로, 상수 순서가 바뀌어도
+ * 라벨과 DB 컬럼이 어긋나지 않는다.
+ */
+export function surveyQuestionLabel(question: { key: string; text: string }): string {
+  return `${question.key.toUpperCase()}. ${question.text}`;
+}
+
 export const LIKERT_SCALE_LABELS = [
   "1점(전혀 그렇지 않다)",
   "2점(그렇지 않다)",

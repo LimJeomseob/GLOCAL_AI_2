@@ -10,6 +10,7 @@ import { TABLES } from "@/lib/db-tables";
 import {
   AWARENESS_PATH_OPTIONS,
   SURVEY_LIKERT_QUESTIONS,
+  SURVEY_OPEN_QUESTION,
   LIKERT_SCALE_LABELS,
   type WorkshopSeed,
 } from "@/lib/constants";
@@ -248,7 +249,7 @@ export function SurveyForm({ workshopSeeds, initialRound }: SurveyFormProps) {
         </div>
 
         <FormField
-          label="기타 의견(자유롭게 작성해 주세요)"
+          label={SURVEY_OPEN_QUESTION.text}
           error={errors.q6}
           hint="선택 입력 사항입니다."
         >
