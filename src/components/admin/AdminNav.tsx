@@ -16,6 +16,8 @@ const ADMIN_TABS: { href: string; label: string; roles?: AdminRole[] }[] = [
   { href: "/admin/study-groups", label: "연구모임 관리", roles: ["admin", "superadmin"] },
   { href: "/admin/study-review", label: "계획서 심사" },
   { href: "/admin/study-progress", label: "연구모임 운영현황", roles: ["admin", "superadmin"] },
+  // 심사기준 1번의 근거 대장. 심사위원은 심사 화면에서 결과만 보면 되므로 관리자 전용으로 둔다.
+  { href: "/admin/prior-participation", label: "참여이력 관리", roles: ["admin", "superadmin"] },
 ];
 
 export function AdminNav({ role }: { role?: AdminRole }) {

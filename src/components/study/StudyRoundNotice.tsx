@@ -79,7 +79,7 @@ export function StudyRoundNotice() {
           </p>
         </div>
 
-        <Link href="/study/apply">
+        <Link href="/apply">
           <Button variant="primary" size="lg" disabled={!window_.isOpen}>
             {window_.isOpen ? "연구모임 신청하기" : window_.isNotYetOpen ? "신청 예정" : "신청 마감"}
           </Button>

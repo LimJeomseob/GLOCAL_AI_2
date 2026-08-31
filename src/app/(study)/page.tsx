@@ -307,12 +307,12 @@ export default function StudyIntroPage() {
       </section>
 
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center sm:flex-row sm:justify-center">
-        <Link href="/study/apply">
+        <Link href="/apply">
           <span className="inline-flex w-full items-center justify-center rounded-lg bg-accent px-8 py-4 text-base font-bold text-white shadow-card transition-colors hover:bg-brand sm:w-auto sm:text-lg">
             연구모임 신청하기
           </span>
         </Link>
-        <Link href="/study/lookup">
+        <Link href="/lookup">
           <span className="inline-flex w-full items-center justify-center rounded-lg border-2 border-brand bg-white px-8 py-4 text-base font-bold text-brand shadow-card transition-colors hover:bg-brand/5 sm:w-auto sm:text-lg">
             내 연구모임 조회
           </span>

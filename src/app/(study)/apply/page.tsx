@@ -56,7 +56,7 @@ export default function StudyApplyPage() {
           다음 모집 일정은 사업안내에서 확인해 주세요.
         </p>
         <Link
-          href="/study"
+          href="/"
           className="mt-6 inline-block font-semibold text-accent underline underline-offset-2"
         >
           사업안내로 이동

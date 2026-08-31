@@ -1,13 +1,20 @@
 # 글로컬 AI 동행 포털
 
-경상국립대학교 글로컬대학30 사업 포털. 두 개의 사업 트랙을 한 사이트에서 서비스합니다.
+경상국립대학교 글로컬대학30 사업 **「2026학년도 2학기 AI 활용 연구모임」** 신청·심사·운영 포털
+(`PRD.md` §15, 설계 근거는 `docs/연구모임_신청시스템_재구성_전략.md`).
 
-- **트랙 A — 특강**: 「일과 삶을 바꾸는 생성형 AI 실무과정」 신청·조회·만족도조사·수료증 (`PRD.md` §1~14)
-- **트랙 B — 연구모임**: 「2026학년도 2학기 AI 활용 연구모임」 신청·심사·운영·결과보고
-  (`PRD.md` §15, 설계 근거는 `docs/연구모임_신청시스템_재구성_전략.md`)
+### 특강(구 트랙 A)에 대하여
 
-두 트랙은 **같은 Supabase 데이터베이스**를 쓰되 테이블 네임스페이스(`study_` 접두어)로 분리되어 있습니다.
-기존 특강 테이블은 트랙 B 도입으로 스키마가 변경되지 않았습니다.
+이 포털은 원래 「일과 삶을 바꾸는 생성형 AI 실무과정」 특강용이었고(`PRD.md` §1~14),
+2026-08-31에 **공개 페이지를 폐지**하고 연구모임을 루트로 올렸습니다. 다만 특강의
+**신청 253건·수료증·설문 데이터는 그대로 보존**되어 있으며 접근 경로도 남아 있습니다.
+
+- 관리자 포털의 **「신청자 관리」·「만족도 설문결과」 탭은 유지** — 조회·엑셀 내보내기·수료증 발급 가능
+- DB 테이블(`workshops`/`applications`/`certificates`/`LAWdata`)과
+  Edge Function(`lookup`/`cancel-application`/`issue-certificate`)도 그대로 둡니다
+- 연구모임 심사기준 1번(프로그램 참여·이수 이력)이 `applications`를 조회합니다.
+  다만 관리자 「참여이력 관리」 탭에서 이력을 직접 등록할 수 있어(`0017`),
+  특강 데이터가 없어도 심사기준 1번은 성립합니다
 
 이 저장소는 **완전 정적 사이트(Next.js `output: 'export'`)** 로 빌드되어 **GitHub Pages** 에 배포됩니다.
 서버가 필요한 로직(신청내역조회, 수료증 PDF 발급)은 **Supabase Edge Function** 으로 분리되어 있습니다.
@@ -40,9 +47,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0016`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0017`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0016` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0017` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -99,12 +106,13 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
 
 ## 폴더 구조 메모
 
-- `src/app/(portal)` — 트랙 A 특강 공개 탭(소개/신청/신청내역조회/만족도조사/수료증 발급)
-- `src/app/(study)` — 트랙 B 연구모임 공개 탭(사업안내/신청/연구계획서/회의록/결과보고서/내 연구모임)
-- `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 신청자 관리 + 만족도 설문결과 +
-  연구모임 관리 · 계획서 심사 · 운영현황)
-- `src/lib/study*.ts` · `src/components/study` — 트랙 B 전용 상수·타입·검증·데이터 접근·컴포넌트.
-  기존 특강 트랙 파일(`constants.ts` 등)과 섞지 않고 분리했습니다.
+- `src/app/(study)` — 공개 탭. 라우트가 곧 루트입니다:
+  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup`
+- `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 +
+  특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
+- `src/lib/study*.ts` · `src/components/study` — 연구모임 전용 상수·타입·검증·데이터 접근·컴포넌트
+- `src/lib/constants.ts`의 `PROGRAM_NAME`은 **수료증 서식과 기존 신청 데이터가 쓰는 특강 명칭**이라
+  바꾸면 과거 수료증과 표기가 어긋납니다. 화면 상단 명칭은 `STUDY_PROGRAM_NAME`을 씁니다.
 - `supabase/migrations` — DB 스키마, RLS 정책, 트리거/함수, 시드 데이터
 - `supabase/functions` — Edge Function(Deno) 소스
 - `.github/workflows/deploy-pages.yml` — GitHub Pages 자동 배포

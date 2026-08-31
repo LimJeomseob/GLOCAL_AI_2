@@ -20,6 +20,7 @@ export const TABLES = {
   STUDY_REPORTS: "study_reports",
   STUDY_OUTPUTS: "study_outputs",
   STUDY_NOTIFICATIONS: "study_notifications",
+  STUDY_PRIOR_PARTICIPATIONS: "study_prior_participations",
 } as const;
 
 export const CERTIFICATES_BUCKET = "certificates";
