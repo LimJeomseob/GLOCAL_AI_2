@@ -5,6 +5,7 @@ import {
   STUDY_APPLY_NOTES,
   STUDY_BENEFIT,
   STUDY_CATEGORY_FALLBACK,
+  STUDY_CAUTIONS,
   STUDY_CRITERIA_FALLBACK,
   STUDY_EDUCATION_MODES,
   STUDY_EXPECTED_EFFECTS,
@@ -272,6 +273,22 @@ export default function StudyIntroPage() {
             <p className="mt-3 text-xs text-slate-500">{STUDY_GUIDELINE_FOOTNOTE}</p>
           </div>
         </details>
+      </section>
+
+      {/* 유의사항 — 이수혜택 바로 아래. 교원은 포인트를 받지만 학생은 역량점수 가산이
+          없으므로, 혜택과 나란히 놓아 오해가 생기지 않게 한다. */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-bold text-brand sm:text-xl">유의사항</h2>
+        <ul className="flex flex-col gap-2" role="list">
+          {STUDY_CAUTIONS.map((caution) => (
+            <li
+              key={caution}
+              className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-medium leading-relaxed text-amber-900"
+            >
+              {caution}
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* 기대효과 */}
