@@ -25,13 +25,22 @@ export function Header() {
             </span>
           </span>
         </Link>
-        <Link
-          href="/admin/login"
-          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
-          aria-label="관리자 화면으로 이동"
-        >
-          관리자
-        </Link>
+        <nav className="flex shrink-0 items-center gap-1" aria-label="사업 전환">
+          {/* 특강(트랙 A)과 연구모임(트랙 B)은 탭이 분리되어 있어, 헤더에서 서로 오갈 수 있게 한다. */}
+          <Link
+            href="/study"
+            className="rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
+          >
+            AI 활용 연구모임
+          </Link>
+          <Link
+            href="/admin/login"
+            className="rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
+            aria-label="관리자 화면으로 이동"
+          >
+            관리자
+          </Link>
+        </nav>
       </div>
     </header>
   );

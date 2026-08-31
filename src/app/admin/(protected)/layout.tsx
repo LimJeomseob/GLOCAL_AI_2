@@ -58,7 +58,7 @@ export default function AdminProtectedLayout({
           </div>
         </div>
       </header>
-      <AdminNav />
+      <AdminNav role={admin.role} />
       <main id="main-content" className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-8 sm:px-6">
         {children}
       </main>
