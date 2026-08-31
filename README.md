@@ -12,8 +12,9 @@
 - 관리자 포털의 **「신청자 관리」·「만족도 설문결과」 탭은 유지** — 조회·엑셀 내보내기·수료증 발급 가능
 - DB 테이블(`workshops`/`applications`/`certificates`/`LAWdata`)과
   Edge Function(`lookup`/`cancel-application`/`issue-certificate`)도 그대로 둡니다
-- 연구모임 심사기준 1번(프로그램 참여·이수 이력)이 `applications`를 조회하므로,
-  이 데이터는 **삭제하면 안 됩니다**
+- 연구모임 심사기준 1번(프로그램 참여·이수 이력)이 `applications`를 조회합니다.
+  다만 관리자 「참여이력 관리」 탭에서 이력을 직접 등록할 수 있어(`0017`),
+  특강 데이터가 없어도 심사기준 1번은 성립합니다
 
 이 저장소는 **완전 정적 사이트(Next.js `output: 'export'`)** 로 빌드되어 **GitHub Pages** 에 배포됩니다.
 서버가 필요한 로직(신청내역조회, 수료증 PDF 발급)은 **Supabase Edge Function** 으로 분리되어 있습니다.
@@ -46,9 +47,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0016`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0017`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0016` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0017` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화

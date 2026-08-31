@@ -226,6 +226,23 @@ export interface StudyOutput {
   sort_order: number;
 }
 
+/**
+ * study_prior_participations — 심사기준 1번의 수기 등록 대장.
+ * 행의 존재 자체가 '참여'이고 `completed`가 true면 '이수'까지 인정된다.
+ */
+export interface StudyPriorParticipation {
+  id: string;
+  name: string;
+  id_number: string;
+  phone: string;
+  program_name: string;
+  program_year: number | null;
+  completed: boolean;
+  note: string;
+  created_by: string;
+  created_at: string;
+}
+
 /** 관리자 목록 화면용 조인 결과 */
 export interface StudyGroupWithRelations extends StudyGroup {
   members: StudyGroupMember[];

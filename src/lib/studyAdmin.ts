@@ -10,6 +10,7 @@ import type {
   StudyMeeting,
   StudyOutput,
   StudyReport,
+  StudyPriorParticipation,
   StudyReview,
   StudyRound,
 } from "./studyTypes";
@@ -233,4 +234,120 @@ export function aggregateWorkshopDemand(
   return Array.from(map.values()).sort(
     (a, b) => a.stepKey.localeCompare(b.stepKey) || a.date.localeCompare(b.date)
   );
+}
+
+// ---------------------------------------------------------------------------
+// 심사기준 1번 — 참여·이수 이력 수기 등록 대장 (study_prior_participations)
+//
+// 자동 조회(특강 applications)만으로는 이 포털을 거치지 않은 프로그램 이력을 잡지 못한다.
+// 심사기준 1번이 20점이라 근거가 비면 배점이 형해화되므로, 관리자가 직접 채워 넣는다.
+// ---------------------------------------------------------------------------
+
+export interface PriorParticipationInput {
+  name: string;
+  idNumber: string;
+  phone: string;
+  programName: string;
+  programYear: number | null;
+  completed: boolean;
+  note: string;
+}
+
+export async function fetchPriorParticipations(): Promise<StudyPriorParticipation[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_PRIOR_PARTICIPATIONS)
+    .select("*")
+    .order("name")
+    .order("program_year", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudyPriorParticipation[];
+}
+
+function toRow(input: PriorParticipationInput) {
+  return {
+    name: input.name.trim(),
+    id_number: input.idNumber.trim(),
+    phone: input.phone.trim(),
+    program_name: input.programName.trim(),
+    program_year: input.programYear,
+    completed: input.completed,
+    note: input.note.trim(),
+    // created_by는 DB 트리거가 세션 이메일로 채운다(위조 방지).
+  };
+}
+
+/**
+ * 여러 건을 한 번에 등록한다. 과거 프로그램 명단은 보통 엑셀로 존재하므로
+ * 한 줄씩 넣게 하면 실무에서 쓰이지 않는다.
+ * 이미 있는 (성명·직번·연락처·프로그램) 조합은 이수 여부만 갱신한다.
+ */
+export async function upsertPriorParticipations(
+  inputs: PriorParticipationInput[]
+): Promise<string | null> {
+  if (inputs.length === 0) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_PRIOR_PARTICIPATIONS)
+    .upsert(inputs.map(toRow), { onConflict: "name,id_number,phone,program_name" });
+
+  return error ? error.message : null;
+}
+
+export async function deletePriorParticipations(ids: string[]): Promise<string | null> {
+  if (ids.length === 0) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_PRIOR_PARTICIPATIONS)
+    .delete()
+    .in("id", ids);
+
+  return error ? error.message : null;
+}
+
+/**
+ * 붙여넣기 한 덩어리를 행으로 판독한다. 엑셀에서 복사하면 탭 구분, 그 외에는 쉼표를 쓴다.
+ * 열 순서: 성명 · 직번 · 연락처 · 프로그램명 · 연도 · 이수여부
+ * 이수여부는 Y/y/O/1/true/이수 를 참으로 본다.
+ */
+export function parsePriorParticipationPaste(text: string): {
+  rows: PriorParticipationInput[];
+  errors: string[];
+} {
+  const rows: PriorParticipationInput[] = [];
+  const errors: string[] = [];
+
+  text.split(/\r?\n/).forEach((line, index) => {
+    const raw = line.trim();
+    if (!raw) return;
+
+    const cells = (raw.includes("\t") ? raw.split("\t") : raw.split(",")).map((c) => c.trim());
+    const [name, idNumber = "", phone = "", programName, year = "", completed = ""] = cells;
+
+    const lineNo = index + 1;
+    if (!name || !programName) {
+      errors.push(`${lineNo}행: 성명과 프로그램명은 필수입니다.`);
+      return;
+    }
+    // 직번도 연락처도 없으면 어떤 신청자와도 이어지지 않는다(DB 제약과 동일 기준).
+    if (!idNumber && !phone) {
+      errors.push(`${lineNo}행: 직번 또는 연락처 중 하나는 있어야 합니다.`);
+      return;
+    }
+
+    const parsedYear = year ? Number(year.replace(/[^0-9]/g, "")) : NaN;
+
+    rows.push({
+      name,
+      idNumber,
+      phone,
+      programName,
+      programYear: Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : null,
+      completed: /^(y|o|1|true|이수)$/i.test(completed),
+      note: "",
+    });
+  });
+
+  return { rows, errors };
 }

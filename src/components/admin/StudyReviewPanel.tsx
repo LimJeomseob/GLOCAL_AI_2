@@ -276,11 +276,15 @@ export function StudyReviewPanel({ reviewerEmail }: { reviewerEmail: string }) {
                         </p>
                       )}
                       <p className="mt-1 text-xs text-sky-700">
-                        대표자 기준 조회 결과입니다. 점수는 심사위원이 직접 입력해 주세요.
+                        대표자 기준 조회 결과이며, <strong>[수기]</strong> 표시는 관리자가 대장에
+                        등록한 건입니다. 점수는 심사위원이 직접 입력해 주세요.
                       </p>
                     </>
                   ) : (
-                    <p className="mt-1 text-xs text-sky-800">조회된 이력이 없습니다.</p>
+                    <p className="mt-1 text-xs text-sky-800">
+                      조회된 이력이 없습니다. 시스템에 기록이 없는 과거 프로그램 이력은 관리자가
+                      「참여이력 관리」에 등록하면 여기에 함께 표시됩니다.
+                    </p>
                   )}
                 </div>
 
