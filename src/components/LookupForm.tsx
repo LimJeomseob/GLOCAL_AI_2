@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FunctionsHttpError } from "@supabase/supabase-js";
+import { extractFunctionError } from "@/lib/functionError";
 import { lookupSchema } from "@/lib/validation";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
@@ -27,18 +27,6 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 interface CancelMessage {
   type: "success" | "error";
   text: string;
-}
-
-async function extractFunctionError(error: unknown, fallback: string): Promise<string> {
-  if (error instanceof FunctionsHttpError) {
-    try {
-      const body = await error.context.json();
-      if (body?.error) return body.error;
-    } catch {
-      // 본문을 읽을 수 없으면 기본 메시지 사용
-    }
-  }
-  return fallback;
 }
 
 /** 본인 취소가 가능한 상태 — 서버(cancel-application)와 동일 기준 */

@@ -156,7 +156,16 @@ export interface LookupResultItem {
   certDownloadUrl: string | null;
 }
 
-export type AdminRole = "admin" | "superadmin";
+/**
+ * 'reviewer'는 연구모임 계획서 심사위원이다(0014). is_admin()에서 제외되므로
+ * 특강 신청자 등 기존 관리자 데이터에는 접근할 수 없고, 심사 화면만 이용한다.
+ */
+export type AdminRole = "admin" | "superadmin" | "reviewer";
+
+/** 심사위원 전용 계정인지 — 운영 관리자 화면(신청자 관리 등)을 감출 때 쓴다. */
+export function isReviewerOnly(role: AdminRole): boolean {
+  return role === "reviewer";
+}
 
 export interface AdminUser {
   id: string;
