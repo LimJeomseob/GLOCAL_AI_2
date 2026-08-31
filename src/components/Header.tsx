@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PROGRAM_NAME } from "@/lib/constants";
+import { STUDY_PROGRAM_NAME } from "@/lib/studyGroupConstants";
 
 export function Header() {
   return (
@@ -21,26 +21,18 @@ export function Header() {
               경상국립대학교 글로컬대학30
             </span>
             <span className="text-sm font-bold text-brand sm:text-base">
-              {PROGRAM_NAME}
+              {STUDY_PROGRAM_NAME}
             </span>
           </span>
         </Link>
-        <nav className="flex shrink-0 items-center gap-1" aria-label="사업 전환">
-          {/* 특강(트랙 A)과 연구모임(트랙 B)은 탭이 분리되어 있어, 헤더에서 서로 오갈 수 있게 한다. */}
-          <Link
-            href="/study"
-            className="rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
-          >
-            AI 활용 연구모임
-          </Link>
-          <Link
-            href="/admin/login"
-            className="rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
-            aria-label="관리자 화면으로 이동"
-          >
-            관리자
-          </Link>
-        </nav>
+        {/* 연구모임이 루트가 되면서 별도의 트랙 전환 링크는 필요 없어졌다(로고가 곧 홈). */}
+        <Link
+          href="/admin/login"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-brand transition-colors hover:bg-brand/5"
+          aria-label="관리자 화면으로 이동"
+        >
+          관리자
+        </Link>
       </div>
     </header>
   );

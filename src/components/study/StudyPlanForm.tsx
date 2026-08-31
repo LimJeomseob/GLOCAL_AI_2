@@ -170,7 +170,7 @@ export function StudyPlanForm({
           ))}
         </div>
 
-        <Link href="/study/lookup">
+        <Link href="/lookup">
           <Button variant="outline" size="lg" className="w-full sm:w-auto">
             내 연구모임 보기
           </Button>

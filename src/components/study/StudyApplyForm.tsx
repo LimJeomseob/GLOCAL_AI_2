@@ -198,12 +198,12 @@ export function StudyApplyForm({ round }: { round: StudyRound }) {
           됩니다.
         </div>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <Link href="/study/plan">
+          <Link href="/plan">
             <Button variant="primary" size="lg" className="w-full sm:w-auto">
               연구계획서 작성하기
             </Button>
           </Link>
-          <Link href="/study/lookup">
+          <Link href="/lookup">
             <Button variant="outline" size="lg" className="w-full sm:w-auto">
               내 연구모임 보기
             </Button>

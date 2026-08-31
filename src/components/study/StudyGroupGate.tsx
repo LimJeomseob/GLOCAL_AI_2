@@ -235,7 +235,7 @@ export function StudyGroupGate({ title, description, children }: StudyGroupGateP
 
         <p className="text-center text-sm text-slate-500">
           아직 신청하지 않으셨나요?{" "}
-          <Link href="/study/apply" className="font-semibold text-accent underline underline-offset-2">
+          <Link href="/apply" className="font-semibold text-accent underline underline-offset-2">
             연구모임 신청하기
           </Link>
         </p>

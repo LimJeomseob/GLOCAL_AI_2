@@ -33,7 +33,7 @@ export const STUDY_FLOW_STEPS = [
     title: "연구모임 신청",
     channel: "시스템 접수",
     detail: "3~5명 이내 자유롭게 모임 구성",
-    href: "/study/apply",
+    href: "/apply",
   },
   {
     no: "02",
@@ -47,21 +47,21 @@ export const STUDY_FLOW_STEPS = [
     title: "운영 안내",
     channel: "시스템 안내",
     detail: "승인된 연구모임 활동 안내",
-    href: "/study/lookup",
+    href: "/lookup",
   },
   {
     no: "04",
     title: "연구모임 운영",
     channel: "시스템을 통한 관리",
     detail: "승인된 계획서에 따라 각 팀별 퍼실리테이터와 함께 연구모임 운영",
-    href: "/study/meetings",
+    href: "/meetings",
   },
   {
     no: "05",
     title: "결과보고서 제출",
     channel: "시스템 제출",
     detail: "회의록, 산출물, 결과보고서 제출",
-    href: "/study/report",
+    href: "/report",
   },
 ] as const;
 

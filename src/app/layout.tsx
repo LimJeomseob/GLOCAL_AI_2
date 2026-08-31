@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "일과 삶을 바꾸는 생성형 AI 실무과정 | 경상국립대학교 글로컬대학30",
+  title: "2026학년도 2학기 AI 활용 연구모임 | 경상국립대학교 글로컬대학30",
   description:
-    "경상국립대학교 글로컬대학30 사업 — 2026학년도 모두의 AI를 위한 7~8월 AI활용 특강 신청·관리 포털",
+    "경상국립대학교 글로컬대학30 사업 — AI 활용 연구모임 신청·심사·운영 포털. 신청기간 2026. 9. 7. ~ 9. 18., 10개팀 최대 50명 선발",
 };
 
 export default function RootLayout({

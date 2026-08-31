@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAdminSession } from "@/lib/useAdminSession";
 import { Button } from "@/components/ui/Button";
-import { PROGRAM_NAME } from "@/lib/constants";
+import { STUDY_PROGRAM_NAME } from "@/lib/studyGroupConstants";
 
 function LoginContent() {
   const router = useRouter();
@@ -63,7 +63,7 @@ function LoginContent() {
           GNU
         </div>
         <h1 className="text-lg font-bold text-slate-900">관리자 로그인</h1>
-        <p className="mt-2 text-sm text-slate-500">{PROGRAM_NAME} 관리자 포털</p>
+        <p className="mt-2 text-sm text-slate-500">{STUDY_PROGRAM_NAME} 관리자 포털</p>
         <p className="mt-1 text-xs text-slate-400">
           허용된 구글 계정으로만 로그인할 수 있습니다.
         </p>

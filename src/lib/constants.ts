@@ -10,6 +10,11 @@ export const NOTICE_COLUMNS: { field: NoticeField; label: string }[] = [
   { field: "kakao_notice3_sent", label: "3차 최종수강안내" },
 ];
 
+/**
+ * 특강(구 트랙 A) 명칭. 공개 페이지는 연구모임으로 전환되어 사라졌지만,
+ * 이미 발급된 수료증의 프로그램명과 관리자 화면의 기존 신청자 데이터가 이 값을 쓰므로
+ * 바꾸면 과거 수료증과 표기가 어긋난다. 화면 상단 명칭은 STUDY_PROGRAM_NAME을 쓴다.
+ */
 export const PROGRAM_NAME = "일과 삶을 바꾸는 생성형 AI 실무과정";
 export const PROGRAM_FULL_TITLE =
   "모두의 AI를 위한 7~8월 AI활용 특강 — 일과 삶을 바꾸는 생성형 AI 실무과정";

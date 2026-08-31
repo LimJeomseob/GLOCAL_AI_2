@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAdminSession } from "@/lib/useAdminSession";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SignOutButton } from "@/components/admin/SignOutButton";
-import { PROGRAM_NAME } from "@/lib/constants";
+import { STUDY_PROGRAM_NAME } from "@/lib/studyGroupConstants";
 
 export default function AdminProtectedLayout({
   children,
@@ -49,7 +49,7 @@ export default function AdminProtectedLayout({
             </span>
             <span className="flex flex-col leading-tight">
               <span className="text-xs font-medium text-slate-500">관리자 포털</span>
-              <span className="text-sm font-bold text-brand sm:text-base">{PROGRAM_NAME}</span>
+              <span className="text-sm font-bold text-brand sm:text-base">{STUDY_PROGRAM_NAME}</span>
             </span>
           </div>
           <div className="flex items-center gap-3">

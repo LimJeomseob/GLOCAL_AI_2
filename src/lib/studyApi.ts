@@ -184,7 +184,7 @@ export function deriveNextStep(result: StudyLookupResult): StudyNextStep {
       return {
         label: "연구계획서 작성하기",
         description: "신청서는 저장되었습니다. 계획서를 작성해 제출해야 접수가 완료됩니다.",
-        href: "/study/plan",
+        href: "/plan",
       };
     case "submitted":
     case "under_review":
@@ -197,13 +197,13 @@ export function deriveNextStep(result: StudyLookupResult): StudyNextStep {
       return {
         label: "회의록 등록하기",
         description: "선발되었습니다. 연구모임을 운영하며 회의록을 등록해 주세요.",
-        href: "/study/meetings",
+        href: "/meetings",
       };
     case "in_progress":
       return {
         label: "회의록 등록하기",
         description: "운영 중입니다. 회의록을 채우고 기간 내에 결과보고서를 제출해 주세요.",
-        href: "/study/meetings",
+        href: "/meetings",
       };
     case "report_submitted":
       return {

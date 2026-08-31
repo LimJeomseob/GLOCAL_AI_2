@@ -10,12 +10,12 @@ import clsx from "clsx";
  * 특강 트랙(PortalTabs)과 섞이지 않도록 별도 nav로 둔다.
  */
 const STUDY_TABS = [
-  { href: "/study", label: "사업안내" },
-  { href: "/study/apply", label: "연구모임 신청" },
-  { href: "/study/plan", label: "연구계획서" },
-  { href: "/study/meetings", label: "회의록" },
-  { href: "/study/report", label: "결과보고서" },
-  { href: "/study/lookup", label: "내 연구모임" },
+  { href: "/", label: "사업안내" },
+  { href: "/apply", label: "연구모임 신청" },
+  { href: "/plan", label: "연구계획서" },
+  { href: "/meetings", label: "회의록" },
+  { href: "/report", label: "결과보고서" },
+  { href: "/lookup", label: "내 연구모임" },
 ];
 
 export function StudyTabs() {
@@ -25,8 +25,8 @@ export function StudyTabs() {
     <nav aria-label="연구모임 탭 메뉴" className="border-b border-slate-200 bg-white">
       <ul className="mx-auto flex max-w-5xl overflow-x-auto px-2 sm:px-6" role="list">
         {STUDY_TABS.map((tab) => {
-          // "/study"는 정확히 일치할 때만 활성 — 하위 탭에서 함께 켜지지 않게 한다.
-          const isActive = tab.href === "/study" ? pathname === tab.href : pathname.startsWith(tab.href);
+          // "/"는 정확히 일치할 때만 활성 — 하위 탭에서 함께 켜지지 않게 한다.
+          const isActive = tab.href === "/" ? pathname === tab.href : pathname.startsWith(tab.href);
           return (
             <li key={tab.href}>
               <Link
