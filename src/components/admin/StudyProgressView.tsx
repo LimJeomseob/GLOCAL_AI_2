@@ -5,6 +5,10 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
+import {
+  StudySubmissionModal,
+  type SubmissionTab,
+} from "@/components/admin/StudySubmissionModal";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
 import { fetchStudyGroups, fetchStudyRounds } from "@/lib/studyAdmin";
@@ -31,6 +35,8 @@ export function StudyProgressView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [outputTypeFilter, setOutputTypeFilter] = useState<string>(ALL);
+  /** 열람 중인 제출물 — 표의 어느 칸을 눌렀는지에 따라 시작 탭이 정해진다. */
+  const [viewing, setViewing] = useState<{ id: string; tab: SubmissionTab } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -171,7 +177,12 @@ export function StudyProgressView() {
         <>
           {/* 1) 진척 매트릭스 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-base font-bold text-slate-800">팀별 진척</h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-800">팀별 진척</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                회의록·산출물 건수와 결과보고서 상태를 클릭하면 실제 제출한 내용을 볼 수 있습니다.
+              </p>
+            </div>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
               <table className="w-full min-w-[820px] text-sm">
                 <thead>
@@ -200,13 +211,41 @@ export function StudyProgressView() {
                             meetingShort ? "text-amber-700" : "text-emerald-700"
                           )}
                         >
-                          {g.meetings.length}
-                          <span className="ml-0.5 text-xs font-normal text-slate-400">
-                            /{STUDY_MEETING_TARGET_COUNT}
-                          </span>
+                          {/* 열 내용이 없으면 버튼으로 만들지 않는다 — 눌러도 빈 창만 뜬다 */}
+                          {g.meetings.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setViewing({ id: g.id, tab: "meetings" })}
+                              aria-label={`${g.name} 회의록 ${g.meetings.length}건 보기`}
+                              className="underline underline-offset-2 hover:text-brand"
+                            >
+                              {g.meetings.length}
+                              <span className="ml-0.5 text-xs font-normal text-slate-400">
+                                /{STUDY_MEETING_TARGET_COUNT}
+                              </span>
+                            </button>
+                          ) : (
+                            <>
+                              0
+                              <span className="ml-0.5 text-xs font-normal text-slate-400">
+                                /{STUDY_MEETING_TARGET_COUNT}
+                              </span>
+                            </>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-slate-700">
-                          {g.outputs.length}
+                          {g.outputs.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setViewing({ id: g.id, tab: "outputs" })}
+                              aria-label={`${g.name} 산출물 ${g.outputs.length}건 보기`}
+                              className="underline underline-offset-2 hover:text-brand"
+                            >
+                              {g.outputs.length}
+                            </button>
+                          ) : (
+                            0
+                          )}
                         </td>
                         <td
                           className={clsx(
@@ -214,7 +253,19 @@ export function StudyProgressView() {
                             reportDone ? "text-emerald-700" : "text-amber-700"
                           )}
                         >
-                          {reportDone ? "제출" : "미제출"}
+                          {/* 미제출이어도 임시저장 행이 있으면 관리자는 초안을 볼 수 있다 */}
+                          {g.report ? (
+                            <button
+                              type="button"
+                              onClick={() => setViewing({ id: g.id, tab: "report" })}
+                              aria-label={`${g.name} 결과보고서 보기`}
+                              className="underline underline-offset-2 hover:text-brand"
+                            >
+                              {reportDone ? "제출" : "임시저장"}
+                            </button>
+                          ) : (
+                            "미제출"
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <StudyStatusBadge status={g.status} />
@@ -321,6 +372,12 @@ export function StudyProgressView() {
               상태 변경은 「연구모임 관리」 탭에서 합니다.
             </p>
           </section>
+
+          <StudySubmissionModal
+            group={groups.find((g) => g.id === viewing?.id) ?? null}
+            initialTab={viewing?.tab ?? "meetings"}
+            onClose={() => setViewing(null)}
+          />
         </>
       )}
     </div>

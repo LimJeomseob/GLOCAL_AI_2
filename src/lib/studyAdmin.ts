@@ -91,6 +91,24 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
   }));
 }
 
+/**
+ * 회의록 본문 조회.
+ * fetchStudyGroups()는 목록 화면이 쓰는 건수·일자만 실어 오므로(본문까지 넣으면 회차 전체가
+ * 매번 따라온다), 열람 모달을 열 때 해당 팀 것만 따로 가져온다.
+ * 목록의 최신순과 달리 읽을 때는 1차→3차 시간순이 자연스러워 오름차순으로 정렬한다.
+ */
+export async function fetchStudyMeetings(groupId: string): Promise<StudyMeeting[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_MEETINGS)
+    .select("*")
+    .eq("group_id", groupId)
+    .order("met_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudyMeeting[];
+}
+
 /** 심사 목록. 심사위원은 RLS에 의해 자기 행만 돌아온다. */
 export async function fetchStudyReviews(groupIds: string[]): Promise<StudyReview[]> {
   if (groupIds.length === 0) return [];

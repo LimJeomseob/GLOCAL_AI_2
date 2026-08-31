@@ -45,3 +45,39 @@ textarea:focus-visible,
   left: 1rem;
   top: 1rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * 제출물 열람 모달 인쇄
+ *
+ * Modal은 document.body 직계로 포털된다. printable 모달에 data-print-root가 붙으므로
+ * body의 나머지 자식(관리자 탭·표·헤더)을 숨기면 열람 중인 내용만 남는다.
+ * ------------------------------------------------------------------------ */
+@media print {
+  body > *:not([data-print-root]) {
+    display: none !important;
+  }
+
+  [data-print-root] {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+
+  [data-print-root] [role="dialog"] {
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* 탭 바·인쇄·닫기 버튼처럼 종이에 남길 이유가 없는 조작 요소 */
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* 화면에서는 선택한 탭만 보이지만, 인쇄물에는 세 항목이 모두 나오게 한다 */
+  [data-print-show] {
+    display: block !important;
+  }
+}

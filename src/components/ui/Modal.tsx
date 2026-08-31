@@ -2,11 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import clsx from "clsx";
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   titleId: string;
+  /** 긴 본문을 읽는 용도면 "wide". 기본값은 확인창용 좁은 폭. */
+  size?: "default" | "wide";
+  /**
+   * 인쇄 시 이 모달만 남기고 페이지의 나머지를 숨긴다(globals.css의 @media print 규칙).
+   * 포털이 document.body 직계로 붙는 덕에 선택자가 단순해진다.
+   */
+  printable?: boolean;
   children: React.ReactNode;
 }
 
@@ -14,7 +22,14 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** 접근성 모달: 배경 딤드, ESC/배경클릭 닫힘, 포커스 트랩, 모바일 전체화면 */
-export function Modal({ open, onClose, titleId, children }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  titleId,
+  size = "default",
+  printable = false,
+  children,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
@@ -63,6 +78,7 @@ export function Modal({ open, onClose, titleId, children }: ModalProps) {
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-0 sm:p-6"
+      data-print-root={printable ? "" : undefined}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -73,7 +89,10 @@ export function Modal({ open, onClose, titleId, children }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="h-full w-full overflow-y-auto bg-white p-6 shadow-xl focus:outline-none sm:h-auto sm:max-h-[85vh] sm:max-w-lg sm:rounded-2xl sm:p-8"
+        className={clsx(
+          "h-full w-full overflow-y-auto bg-white p-6 shadow-xl focus:outline-none sm:h-auto sm:max-h-[85vh] sm:rounded-2xl sm:p-8",
+          size === "wide" ? "sm:max-w-3xl" : "sm:max-w-lg"
+        )}
       >
         {children}
       </div>
