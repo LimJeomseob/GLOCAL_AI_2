@@ -120,6 +120,13 @@ export interface StudyRound {
   is_active: boolean;
 }
 
+/** study_groups.ethics_pledges 원소 — GNU 생성형 AI 윤리 8대 핵심원칙 실천 다짐 */
+export interface StudyEthicsPledgeRecord {
+  no: number;
+  title: string;
+  pledge: string;
+}
+
 export interface StudyGroupMember {
   id: string;
   group_id: string;
@@ -149,6 +156,8 @@ export interface StudyGroup {
   member_count: number;
   is_multi_dept: boolean;
   has_nontenured: boolean;
+  /** 윤리교육 게이트에서 작성한 8대 핵심원칙 실천 다짐. 도입 전 신청 건은 빈 배열 */
+  ethics_pledges: StudyEthicsPledgeRecord[];
   progress_method: StudyProgressMethod | null;
   education_mode: StudyEducationMode | null;
   status: StudyGroupStatus;

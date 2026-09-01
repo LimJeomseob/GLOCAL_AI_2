@@ -3,14 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StudyApplyForm } from "@/components/study/StudyApplyForm";
+import { StudyEthicsGate } from "@/components/study/StudyEthicsGate";
 import { fetchActiveStudyRound } from "@/lib/studyApi";
+import type { StudyEthicsPledge } from "@/lib/studyValidation";
 import type { StudyRound } from "@/lib/studyTypes";
 
-/** 탭 2. 연구모임 신청 — [서식 1] 신청서 (근거문서 7페이지) */
+/** 탭 2. 연구모임 신청 — 윤리교육 게이트 → [서식 1] 신청서 (근거문서 7페이지) */
 export default function StudyApplyPage() {
   const [round, setRound] = useState<StudyRound | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // null이면 윤리교육 미이수 — 게이트를 먼저 보여준다. 페이지 state로 들고 있어
+  // 신청서 단계에서 되돌아와도 작성한 다짐이 유지된다.
+  const [ethicsPledges, setEthicsPledges] = useState<StudyEthicsPledge[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -65,5 +70,9 @@ export default function StudyApplyPage() {
     );
   }
 
-  return <StudyApplyForm round={round} />;
+  if (ethicsPledges === null) {
+    return <StudyEthicsGate onComplete={setEthicsPledges} />;
+  }
+
+  return <StudyApplyForm round={round} ethicsPledges={ethicsPledges} />;
 }
