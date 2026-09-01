@@ -80,6 +80,22 @@ export function isMultiDepartment(members: { affiliation: string }[]): boolean {
   return departments.size >= 2;
 }
 
+/**
+ * AI 윤리교육 실천 다짐 1건. 게이트 화면과 Edge Function이 같은 규칙으로 검사한다
+ * (3개 이상·원칙 중복 금지는 배열 단위라 각각의 호출부에서 검사).
+ */
+export const studyEthicsPledgeSchema = z.object({
+  no: z.number().int().min(1).max(8),
+  title: z.string().trim().min(1).max(100),
+  pledge: z
+    .string()
+    .trim()
+    .min(10, "실천 다짐을 10자 이상 작성해 주세요.")
+    .max(1000, "실천 다짐은 1,000자 이내로 작성해 주세요."),
+});
+
+export type StudyEthicsPledge = z.infer<typeof studyEthicsPledgeSchema>;
+
 /** 본인확인(대표자 성명 + 연락처) — 탭 3~6의 게이트 */
 export const studyIdentitySchema = z.object({
   leaderName: z.string().trim().min(1, "대표자 성명을 입력해 주세요."),

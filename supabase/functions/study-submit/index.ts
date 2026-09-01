@@ -33,6 +33,13 @@ const memberSchema = z.object({
   isLeader: z.boolean().default(false),
 });
 
+/** 윤리교육 실천 다짐 — 화면(studyEthicsPledgeSchema)과 같은 규칙으로 다시 검사한다 */
+const ethicsPledgeSchema = z.object({
+  no: z.number().int().min(1).max(8),
+  title: z.string().trim().min(1).max(100),
+  pledge: z.string().trim().min(10).max(1000),
+});
+
 const applySchema = z.object({
   kind: z.literal("apply"),
   roundId: z.string().uuid(),
@@ -46,6 +53,8 @@ const applySchema = z.object({
   leaderEmail: z.string().trim().email(),
   hasNontenured: z.boolean().default(false),
   members: z.array(memberSchema).min(1).max(20),
+  // 윤리교육 게이트(8대 핵심원칙 중 3개 이상)를 통과해야 신청이 저장된다
+  ethicsPledges: z.array(ethicsPledgeSchema).min(3).max(8),
   consent: z.literal(true),
 });
 
@@ -193,6 +202,11 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "참여자 직(학)번이 중복되었습니다." }, 400);
     }
 
+    const pledgeNos = body.ethicsPledges.map((p) => p.no);
+    if (new Set(pledgeNos).size !== pledgeNos.length) {
+      return jsonResponse({ error: "윤리교육 실천 다짐의 원칙이 중복되었습니다." }, 400);
+    }
+
     // 같은 대표자가 같은 회차에 남겨 둔 임시저장 건이 있으면 새로 만들지 않고 갱신한다
     // (탭 2로 되돌아왔을 때 중복 접수가 쌓이는 것을 막는다).
     const { data: existingList } = await supabase
@@ -218,6 +232,7 @@ Deno.serve(async (req: Request) => {
       leader_phone: body.leaderPhone,
       leader_email: body.leaderEmail,
       has_nontenured: body.hasNontenured,
+      ethics_pledges: body.ethicsPledges,
       period_start: round.period_start,
       period_end: round.period_end,
       consent: true,

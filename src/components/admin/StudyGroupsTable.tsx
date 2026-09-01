@@ -373,6 +373,24 @@ export function StudyGroupsTable() {
               ))}
             </ul>
 
+            <h3 className="mt-5 text-sm font-bold text-slate-800">AI 윤리교육 실천 다짐</h3>
+            {(detail.ethics_pledges ?? []).length > 0 ? (
+              <ul className="mt-2 space-y-2 text-sm text-slate-600" role="list">
+                {detail.ethics_pledges.map((p) => (
+                  <li key={p.no}>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {p.no}. {p.title}
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-slate-700">
+                      {p.pledge}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">작성 없음 (윤리교육 도입 전 신청 건)</p>
+            )}
+
             <h3 className="mt-5 text-sm font-bold text-slate-800">연구계획서</h3>
             {detail.plan ? (
               <div className="mt-2 space-y-3 text-sm">

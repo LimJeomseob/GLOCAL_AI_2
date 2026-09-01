@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, formatDateTime, formatPhoneInput } from "@/lib/format";
 import { studyApplySchema, validateMembers, isMultiDepartment } from "@/lib/studyValidation";
-import type { StudyMemberInput } from "@/lib/studyValidation";
+import type { StudyEthicsPledge, StudyMemberInput } from "@/lib/studyValidation";
 import { deriveStudyRoundWindow, submitStudy, writeStudyIdentity } from "@/lib/studyApi";
 import {
   STUDY_APPLY_NOTES,
@@ -62,7 +62,14 @@ const EMPTY_MEMBER: StudyMemberInput = {
  * 적게 되어 있어 두 곳의 이름이 어긋나는 사고가 잦은데, 시스템에서는 어긋날 수 없게 만든다.
  * 따라서 화면의 "참여자 추가"는 대표자를 뺀 나머지 인원을 다룬다.
  */
-export function StudyApplyForm({ round }: { round: StudyRound }) {
+export function StudyApplyForm({
+  round,
+  ethicsPledges,
+}: {
+  round: StudyRound;
+  /** 윤리교육 게이트에서 작성한 8대 핵심원칙 실천 다짐(3개 이상) — 신청서와 함께 저장 */
+  ethicsPledges: StudyEthicsPledge[];
+}) {
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   // 최소 인원(대표자 포함 min)을 채우도록 대표자 외 (min-1)행을 미리 깔아 둔다.
   const [members, setMembers] = useState<StudyMemberInput[]>(
@@ -167,6 +174,7 @@ export function StudyApplyForm({ round }: { round: StudyRound }) {
         position: m.position.trim(),
         isLeader: m.isLeader,
       })),
+      ethicsPledges,
       consent: true,
     });
 
@@ -590,6 +598,10 @@ export function StudyApplyForm({ round }: { round: StudyRound }) {
             <dd>
               {allMembers.length}명{multiDept && " · 복수 학과(가산점 대상)"}
             </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-semibold text-slate-500">윤리교육</dt>
+            <dd>이수 · 핵심원칙 {ethicsPledges.length}개 실천 다짐 작성</dd>
           </div>
         </dl>
 
