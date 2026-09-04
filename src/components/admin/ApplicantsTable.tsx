@@ -91,7 +91,7 @@ function HeaderTextFilter({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder ?? "필터"}
       aria-label={`${label} 필터`}
-      className="w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] font-normal normal-case text-slate-700 placeholder:text-slate-400 focus:border-accent"
+      className="w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[14px] font-normal normal-case text-slate-700 placeholder:text-slate-400 focus:border-accent"
     />
   );
 }
@@ -113,7 +113,7 @@ function HeaderSelectFilter<T extends string>({
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       aria-label={`${label} 필터`}
-      className="w-full min-w-0 rounded border border-slate-300 bg-white px-1 py-1 text-[11px] font-normal normal-case text-slate-700 focus:border-accent"
+      className="w-full min-w-0 rounded border border-slate-300 bg-white px-1 py-1 text-[14px] font-normal normal-case text-slate-700 focus:border-accent"
     >
       {options.map((opt) => (
         <option key={opt} value={opt}>
@@ -135,9 +135,9 @@ const ADMIN_ROW_BORDER_CLASS =
   "[&>td]:border-y-2 [&>td]:border-violet-500 [&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2";
 
 const DRAFT_INPUT_CLASS =
-  "w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] font-normal text-slate-800 placeholder:text-slate-400 focus:border-accent disabled:bg-slate-100 disabled:text-slate-400";
+  "w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[14px] font-normal text-slate-800 placeholder:text-slate-400 focus:border-accent disabled:bg-slate-100 disabled:text-slate-400";
 
-const DRAFT_ERROR_CLASS = "mt-1 text-[10px] font-medium leading-tight text-red-600";
+const DRAFT_ERROR_CLASS = "mt-1 text-[13px] font-medium leading-tight text-red-600";
 
 /** 참여자 추가 입력 행에서 쓰는 회차 옵션(전체 회차 — 마감·오픈 전 회차도 관리자는 선택 가능) */
 interface DraftWorkshopOption {
@@ -1111,7 +1111,7 @@ export function ApplicantsTable({
                 <th
                   key={field}
                   scope="col"
-                  className="w-16 break-keep px-1 py-1 text-center text-[10px] leading-tight"
+                  className="w-16 break-keep px-1 py-1 text-center text-[13px] leading-tight"
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{label}</span>
@@ -1223,7 +1223,7 @@ export function ApplicantsTable({
                   </td>
                   <td colSpan={5} className="px-2 py-2">
                     <div className="flex flex-col gap-2">
-                      <label className="flex items-start gap-1.5 text-[11px] font-medium leading-tight text-slate-700">
+                      <label className="flex items-start gap-1.5 text-[14px] font-medium leading-tight text-slate-700">
                         <input
                           type="checkbox"
                           checked={draft.consent}

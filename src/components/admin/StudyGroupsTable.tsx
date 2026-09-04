@@ -305,7 +305,7 @@ export function StudyGroupsTable() {
                     <td className="px-3 py-3 text-right tabular-nums text-slate-700">
                       {g.member_count}
                       {g.is_multi_dept && (
-                        <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[13px] font-bold text-amber-800">
                           복수
                         </span>
                       )}
