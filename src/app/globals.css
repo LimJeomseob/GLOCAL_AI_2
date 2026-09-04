@@ -10,6 +10,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* 가독성 향상: 기본 글자 크기 130% 확대 (16px 기준 → 20.8px).
+     Tailwind가 rem 단위를 쓰므로 글자·여백이 함께 비례 확대된다. */
+  font-size: 130%;
 }
 
 body {
