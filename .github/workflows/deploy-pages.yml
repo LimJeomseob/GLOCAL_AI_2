@@ -24,6 +24,8 @@ jobs:
       # 프로젝트 사이트(https://<user>.github.io/<repo>/)는 서브패스가 필요하다.
       # 커스텀 도메인을 쓰는 경우 저장소 Variables에 NEXT_PUBLIC_BASE_PATH=""로 등록해 덮어쓴다.
       NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH || format('/{0}', github.event.repository.name) }}
+      # 링크 미리보기(OG 썸네일)용 사이트 절대 주소. 커스텀 도메인은 Variables에 NEXT_PUBLIC_SITE_URL로 등록한다.
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
