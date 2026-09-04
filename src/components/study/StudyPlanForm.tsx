@@ -189,6 +189,17 @@ export function StudyPlanForm({
             <li key={rule}>· {rule}</li>
           ))}
         </ul>
+        {/* 교육과정 3단계 — 5번 항목·워크숍 희망일 작성 시 각 단계가 무엇인지 같은 화면에서 보게 한다 */}
+        <h3 className="mt-4 text-sm font-bold text-slate-800">
+          교육과정 3단계 — 기획 → 제작 → 환류 (5번 항목 · 워크숍 희망일 작성 참고)
+        </h3>
+        <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-600 sm:text-sm">
+          {STUDY_WORKSHOP_STEPS.map((step) => (
+            <li key={step.key}>
+              · <strong className="text-slate-700">{step.name}({step.hours}H)</strong>: {step.detail}
+            </li>
+          ))}
+        </ul>
         <p className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-500">
           서체·줄간격은 제출본 PDF를 만들 때 서식(굴림 12pt · 줄간격 160%)으로 자동 적용되므로
           화면에서는 신경 쓰지 않으셔도 됩니다. &quot;1페이지 이상&quot; 기준만

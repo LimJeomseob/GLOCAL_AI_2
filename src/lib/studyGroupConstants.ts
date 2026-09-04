@@ -142,7 +142,7 @@ export const STUDY_WORKSHOP_STEPS = [
     order: 2,
     name: "제작",
     hours: 3,
-    detail: "강의 도구 및 콘텐츠 제작",
+    detail: "강의 도구 및 콘텐츠 MVP 제작",
     sub: "실제 MVP 제작 및 문제점 도출",
   },
   {
