@@ -3,6 +3,8 @@
 import { createSupabaseBrowserClient } from "./supabase/client";
 import { TABLES } from "./db-tables";
 import type {
+  StudyExpertApplication,
+  StudyExpertStatus,
   StudyGroup,
   StudyGroupMember,
   StudyGroupPlan,
@@ -234,6 +236,38 @@ export function aggregateWorkshopDemand(
   return Array.from(map.values()).sort(
     (a, b) => a.stepKey.localeCompare(b.stepKey) || a.date.localeCompare(b.date)
   );
+}
+
+// ---------------------------------------------------------------------------
+// 교내 AI활용 전문가 신청 (study_expert_applications, 0019)
+// ---------------------------------------------------------------------------
+
+export async function fetchStudyExpertApplications(
+  roundId: string
+): Promise<StudyExpertApplication[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_EXPERT_APPLICATIONS)
+    .select("*")
+    .eq("round_id", roundId)
+    .order("code");
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudyExpertApplication[];
+}
+
+/** 선정·미선정 처리와 관리자 메모(배정 팀 등). 트리거는 관리자(is_admin)에게 구간 검사를 면제한다. */
+export async function updateStudyExpertApplication(
+  id: string,
+  patch: { status?: StudyExpertStatus; note?: string }
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_EXPERT_APPLICATIONS)
+    .update(patch)
+    .eq("id", id);
+
+  return error ? error.message : null;
 }
 
 // ---------------------------------------------------------------------------

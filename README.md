@@ -30,8 +30,13 @@
   - `supabase/functions/issue-certificate` — 본인확인 후 이수 건 수료증 발급(발급번호 채번·서식 전달)
   - `supabase/functions/study-lookup` — 대표자 성명+연락처가 일치하는 연구모임과 그 팀의 계획서·회의록·
     결과보고서·산출물을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
-  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/plan/
-    meeting-save/meeting-delete/report)로 갈리는 판별 유니온. 연구모임 신청은 "모임 1건 + 참여자
+  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/expert-apply/plan/
+    meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `expert-apply`는 연구모임을 코칭할
+    교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
+    이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
+    Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가
+    있으면 "Module not found"로 배포가 실패합니다. 운영 담당자가 CLI 없이 대시보드에서 고쳐
+    배포할 수 있도록 한 절충이며, `_shared/cors.ts`를 고칠 때는 이 파일도 함께 확인해야 합니다 연구모임 신청은 "모임 1건 + 참여자
     3~5행 + 계획서 1행"을 한 번에 만들고 접수번호를 되돌려줘야 해서 단일 INSERT로 끝나지 않으므로,
     `study_*` 테이블에는 익명 INSERT 정책을 두지 않고 이 함수로 모았습니다
 - 수료증 PDF 발급/재발급(§6.4)은 Edge Function이 아니라 **관리자의 브라우저**에서 직접 생성합니다
@@ -47,9 +52,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0017`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0019`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0017` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0019` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -107,9 +112,9 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
 ## 폴더 구조 메모
 
 - `src/app/(study)` — 공개 탭. 라우트가 곧 루트입니다:
-  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup`
-- `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 +
-  특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
+  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup` · `/expert-apply`(교내 AI활용 전문가 신청)
+- `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 · 전문가 신청자 ·
+  참여이력 관리 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
 - `src/lib/study*.ts` · `src/components/study` — 연구모임 전용 상수·타입·검증·데이터 접근·컴포넌트
 - `src/lib/constants.ts`의 `PROGRAM_NAME`은 **수료증 서식과 기존 신청 데이터가 쓰는 특강 명칭**이라
   바꾸면 과거 수료증과 표기가 어긋납니다. 화면 상단 명칭은 `STUDY_PROGRAM_NAME`을 씁니다.

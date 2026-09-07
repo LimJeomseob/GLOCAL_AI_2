@@ -16,6 +16,8 @@ const STUDY_TABS = [
   { href: "/meetings", label: "회의록" },
   { href: "/report", label: "결과보고서" },
   { href: "/lookup", label: "내 연구모임" },
+  // 연구모임 5단계 흐름과 별개인 교원 대상 모집(코칭 전문가)이라 흐름을 끊지 않도록 맨 뒤에 둔다.
+  { href: "/expert-apply", label: "전문가 신청" },
 ];
 
 export function StudyTabs() {

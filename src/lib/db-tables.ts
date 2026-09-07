@@ -21,6 +21,7 @@ export const TABLES = {
   STUDY_OUTPUTS: "study_outputs",
   STUDY_NOTIFICATIONS: "study_notifications",
   STUDY_PRIOR_PARTICIPATIONS: "study_prior_participations",
+  STUDY_EXPERT_APPLICATIONS: "study_expert_applications",
 } as const;
 
 export const CERTIFICATES_BUCKET = "certificates";
