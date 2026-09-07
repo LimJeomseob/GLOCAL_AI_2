@@ -52,9 +52,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0019`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0020`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0019` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0020` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
