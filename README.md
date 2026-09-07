@@ -32,7 +32,11 @@
     결과보고서·산출물을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
   - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/expert-apply/plan/
     meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `expert-apply`는 연구모임을 코칭할
-    교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`). 연구모임 신청은 "모임 1건 + 참여자
+    교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
+    이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
+    Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가
+    있으면 "Module not found"로 배포가 실패합니다. 운영 담당자가 CLI 없이 대시보드에서 고쳐
+    배포할 수 있도록 한 절충이며, `_shared/cors.ts`를 고칠 때는 이 파일도 함께 확인해야 합니다 연구모임 신청은 "모임 1건 + 참여자
     3~5행 + 계획서 1행"을 한 번에 만들고 접수번호를 되돌려줘야 해서 단일 INSERT로 끝나지 않으므로,
     `study_*` 테이블에는 익명 INSERT 정책을 두지 않고 이 함수로 모았습니다
 - 수료증 PDF 발급/재발급(§6.4)은 Edge Function이 아니라 **관리자의 브라우저**에서 직접 생성합니다

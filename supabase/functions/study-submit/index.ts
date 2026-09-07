@@ -11,7 +11,35 @@
 //   · 신청 구간·팀 규모의 최종 강제는 DB 트리거(check_study_group_submit)가 한다
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
-import { handleCorsPreflight, jsonResponse } from "../_shared/cors.ts";
+
+// ---------------------------------------------------------------------------
+// CORS 헬퍼.
+//
+// 다른 네 함수는 ../_shared/cors.ts 를 가져다 쓰지만 이 함수만 같은 내용을 파일 안에 둔다.
+// Supabase 대시보드의 코드 편집기는 index.ts 한 파일만 올리고 그 파일을 source/ 아래에
+// 두므로, ../_shared/ 처럼 상위로 올라가는 import는 번들에 포함되지 않아 "Module not found"로
+// 배포가 실패한다. 이 함수는 운영 담당자가 CLI 없이 대시보드에서 고쳐 배포할 일이 많아,
+// 20줄 중복을 감수하고 단일 파일로 유지한다. _shared/cors.ts 를 고칠 때 여기도 함께 볼 것.
+// ---------------------------------------------------------------------------
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function handleCorsPreflight(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  return null;
+}
 
 const PHONE_REGEX = /^01[0-9]-?\d{3,4}-?\d{4}$/;
 
