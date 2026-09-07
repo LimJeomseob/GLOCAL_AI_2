@@ -118,6 +118,51 @@ export interface StudyRound {
   criteria: StudyCriterion[];
   notes: string;
   is_active: boolean;
+  /** 교내 AI활용 전문가 신청 구간. null이면 이 회차는 전문가 모집 없음(0019). */
+  expert_apply_open_at: string | null;
+  expert_apply_close_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// 교내 AI활용 전문가 신청 (study_expert_applications, 0019)
+// ---------------------------------------------------------------------------
+
+export type StudyExpertStatus = "submitted" | "selected" | "rejected" | "cancelled";
+
+export const STUDY_EXPERT_STATUSES: StudyExpertStatus[] = [
+  "submitted",
+  "selected",
+  "rejected",
+  "cancelled",
+];
+
+export const STUDY_EXPERT_STATUS_LABELS: Record<StudyExpertStatus, string> = {
+  submitted: "접수",
+  selected: "선정",
+  rejected: "미선정",
+  cancelled: "취소",
+};
+
+export interface StudyExpertApplication {
+  id: string;
+  round_id: string;
+  code: string;
+  name: string;
+  affiliation: string;
+  position: string;
+  id_number: string;
+  phone: string;
+  email: string;
+  is_nontenured: boolean;
+  experience: string;
+  categories: StudyCategory[];
+  ai_tools: string;
+  availability_confirmed: boolean;
+  consent: boolean;
+  status: StudyExpertStatus;
+  note: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** study_groups.ethics_pledges 원소 — GNU 생성형 AI 윤리 8대 핵심원칙 실천 다짐 */

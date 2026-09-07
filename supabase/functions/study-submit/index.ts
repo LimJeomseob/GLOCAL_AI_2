@@ -1,4 +1,4 @@
-// 연구모임 제출 Edge Function — 신청서·계획서·회의록·결과보고서·산출물의 유일한 공개 쓰기 경로.
+// 연구모임 제출 Edge Function — 신청서·전문가 신청·계획서·회의록·결과보고서·산출물의 유일한 공개 쓰기 경로.
 //
 // study_* 테이블에는 익명 INSERT 정책이 없다. 연구모임 신청은 "모임 1건 + 참여자 3~5행 +
 // 계획서 1행"을 한 번에 만들고 접수번호를 되돌려줘야 해서 단일 INSERT로 끝나지 않고,
@@ -117,8 +117,30 @@ const reportSchema = z.object({
   submit: z.boolean().default(false),
 });
 
+/**
+ * 교내 AI활용 전문가 신청 — 연구모임(팀) 신청과 별개의 개인 단위 접수.
+ * 화면(studyExpertApplySchema)과 같은 규칙으로 다시 검사한다.
+ */
+const expertApplySchema = z.object({
+  kind: z.literal("expert-apply"),
+  roundId: z.string().uuid(),
+  name: z.string().trim().min(1).max(50),
+  affiliation: z.string().trim().min(1).max(100),
+  position: z.string().trim().min(1).max(50),
+  idNumber: z.string().trim().min(1).max(50),
+  phone: phoneField,
+  email: z.string().trim().email(),
+  isNontenured: z.boolean().default(false),
+  experience: z.string().trim().min(20).max(4000),
+  categories: z.array(z.enum(["초급", "중급", "고급1", "고급2"])).min(1).max(4),
+  aiTools: z.string().trim().max(1000).default(""),
+  availabilityConfirmed: z.literal(true),
+  consent: z.literal(true),
+});
+
 const bodySchema = z.discriminatedUnion("kind", [
   applySchema,
+  expertApplySchema,
   planSchema,
   meetingSaveSchema,
   meetingDeleteSchema,
@@ -296,6 +318,100 @@ Deno.serve(async (req: Request) => {
     await supabase.from("study_group_plans").upsert({ group_id: groupId }, { onConflict: "group_id" });
 
     return jsonResponse({ ok: true, groupId, code });
+  }
+
+  // --------------------------------------------------------------------------
+  // 1-2. 교내 AI활용 전문가 신청 — 개인 단위 접수. 팀 본인확인(verifyLeader)과 무관하다.
+  // --------------------------------------------------------------------------
+  if (body.kind === "expert-apply") {
+    const uniqueCategories = new Set(body.categories);
+    if (uniqueCategories.size !== body.categories.length) {
+      return jsonResponse({ error: "지도 가능 카테고리가 중복되었습니다." }, 400);
+    }
+
+    const fields = {
+      round_id: body.roundId,
+      name: body.name,
+      affiliation: body.affiliation,
+      position: body.position,
+      id_number: body.idNumber,
+      phone: body.phone,
+      email: body.email,
+      is_nontenured: body.isNontenured,
+      experience: body.experience,
+      categories: body.categories,
+      ai_tools: body.aiTools,
+      availability_confirmed: true,
+      consent: true,
+    };
+
+    // 같은 회차·같은 직번의 기존 신청이 있으면 연락처가 일치할 때만 갱신한다
+    // (재제출로 내용을 고칠 수 있게 하되, 직번만 알고 남의 신청을 덮어쓰지는 못하게).
+    const { data: existing, error: existingError } = await supabase
+      .from("study_expert_applications")
+      .select("id, phone, status")
+      .eq("round_id", body.roundId)
+      .eq("id_number", body.idNumber)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("[study-submit] 전문가 신청 조회 실패:", existingError);
+      return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+    }
+
+    const WINDOW_CODES = ["P0001", "P0002", "P0004"];
+
+    if (existing) {
+      if (normalizePhone(existing.phone as string) !== normalizePhone(body.phone)) {
+        return jsonResponse(
+          { error: "이미 신청된 직번입니다. 연락처가 다르면 AI융합원으로 문의해 주세요." },
+          400
+        );
+      }
+      // 이미 선정·미선정 처리된 건은 신청자가 다시 고칠 수 없다.
+      if (existing.status !== "submitted") {
+        return jsonResponse(
+          { error: "이미 처리된 신청입니다. 수정이 필요하면 AI융합원으로 문의해 주세요." },
+          400
+        );
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("study_expert_applications")
+        .update(fields)
+        .eq("id", existing.id)
+        .eq("status", "submitted")
+        .select("id, code")
+        .maybeSingle();
+
+      if (updateError || !updated) {
+        const isWindow = WINDOW_CODES.includes(updateError?.code ?? "");
+        if (!isWindow) console.error("[study-submit] 전문가 신청 갱신 실패:", updateError);
+        return jsonResponse(
+          { error: isWindow ? updateError!.message : "저장 중 오류가 발생했습니다." },
+          isWindow ? 400 : 500
+        );
+      }
+      return jsonResponse({ ok: true, applicationId: updated.id, code: updated.code, updated: true });
+    }
+
+    const { data: created, error: insertError } = await supabase
+      .from("study_expert_applications")
+      .insert(fields)
+      .select("id, code")
+      .maybeSingle();
+
+    if (insertError || !created) {
+      // 트리거가 올린 신청 구간 위반(P0001/P0002/P0004)은 사유를 그대로 보여준다.
+      const isWindow = WINDOW_CODES.includes(insertError?.code ?? "");
+      if (!isWindow) console.error("[study-submit] 전문가 신청 저장 실패:", insertError);
+      return jsonResponse(
+        { error: isWindow ? insertError!.message : "저장 중 오류가 발생했습니다." },
+        isWindow ? 400 : 500
+      );
+    }
+
+    return jsonResponse({ ok: true, applicationId: created.id, code: created.code, updated: false });
   }
 
   // --------------------------------------------------------------------------

@@ -76,6 +76,26 @@ export function deriveStudyRoundWindow(
   return { isNotYetOpen, isClosed, isOpen: !isNotYetOpen && !isClosed };
 }
 
+export interface StudyExpertWindow extends StudyRoundWindow {
+  /** 회차에 전문가 모집 구간이 설정되어 있는지 — false면 나머지 값은 의미 없다 */
+  isAvailable: boolean;
+}
+
+/** 교내 AI활용 전문가 신청 구간 판정(표시용). 최종 강제는 DB 트리거(check_study_expert_apply). */
+export function deriveStudyExpertWindow(
+  round: Pick<StudyRound, "expert_apply_open_at" | "expert_apply_close_at">,
+  now: Date = new Date()
+): StudyExpertWindow {
+  if (!round.expert_apply_open_at || !round.expert_apply_close_at) {
+    return { isAvailable: false, isNotYetOpen: false, isClosed: false, isOpen: false };
+  }
+  const window_ = deriveStudyRoundWindow(
+    { apply_open_at: round.expert_apply_open_at, apply_close_at: round.expert_apply_close_at },
+    now
+  );
+  return { isAvailable: true, ...window_ };
+}
+
 // ---------------------------------------------------------------------------
 // Edge Function 호출
 // ---------------------------------------------------------------------------

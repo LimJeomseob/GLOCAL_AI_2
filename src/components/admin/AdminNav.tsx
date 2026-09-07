@@ -16,6 +16,8 @@ const ADMIN_TABS: { href: string; label: string; roles?: AdminRole[] }[] = [
   { href: "/admin/study-groups", label: "연구모임 관리", roles: ["admin", "superadmin"] },
   { href: "/admin/study-review", label: "계획서 심사" },
   { href: "/admin/study-progress", label: "연구모임 운영현황", roles: ["admin", "superadmin"] },
+  // 교내 AI활용 전문가(코칭 강사) 신청 접수·선정. 개인정보가 있으므로 관리자 전용.
+  { href: "/admin/expert-applicants", label: "전문가 신청자", roles: ["admin", "superadmin"] },
   // 심사기준 1번의 근거 대장. 심사위원은 심사 화면에서 결과만 보면 되므로 관리자 전용으로 둔다.
   { href: "/admin/prior-participation", label: "참여이력 관리", roles: ["admin", "superadmin"] },
 ];

@@ -96,6 +96,39 @@ export const studyEthicsPledgeSchema = z.object({
 
 export type StudyEthicsPledge = z.infer<typeof studyEthicsPledgeSchema>;
 
+/**
+ * 교내 AI활용 전문가 신청 — 탭 7. Edge Function(expertApplySchema)과 같은 규칙.
+ * 카테고리 중복 금지는 화면이 체크박스라 생길 수 없어 서버에서만 검사한다.
+ */
+export const studyExpertApplySchema = z.object({
+  roundId: z.string().uuid("모집회차 정보를 불러오지 못했습니다. 새로고침해 주세요."),
+  name: z.string().trim().min(1, "성명을 입력해 주세요.").max(50),
+  affiliation: z.string().trim().min(1, "소속을 입력해 주세요.").max(100),
+  position: z.string().trim().min(1, "직급을 입력해 주세요.").max(50),
+  idNumber: z.string().trim().min(1, "직번을 입력해 주세요.").max(50),
+  phone: phoneSchema,
+  email: emailSchema,
+  isNontenured: z.boolean().default(false),
+  experience: z
+    .string()
+    .trim()
+    .min(20, "생성형 AI 활용 교수법 또는 연구 경험을 20자 이상 작성해 주세요.")
+    .max(4000, "경험은 4,000자 이내로 작성해 주세요."),
+  categories: z
+    .array(z.enum(STUDY_CATEGORIES as [string, ...string[]]))
+    .min(1, "지도 가능 카테고리를 1개 이상 선택해 주세요.")
+    .max(4),
+  aiTools: z.string().trim().max(1000, "주요 활용 AI 도구는 1,000자 이내로 작성해 주세요.").default(""),
+  availabilityConfirmed: z.literal(true, {
+    errorMap: () => ({ message: "운영기간 중 3회 코칭 참여 가능 여부를 확인해 주세요." }),
+  }),
+  consent: z.literal(true, {
+    errorMap: () => ({ message: "개인정보 수집·이용에 동의해 주세요." }),
+  }),
+});
+
+export type StudyExpertApplyInput = z.infer<typeof studyExpertApplySchema>;
+
 /** 본인확인(대표자 성명 + 연락처) — 탭 3~6의 게이트 */
 export const studyIdentitySchema = z.object({
   leaderName: z.string().trim().min(1, "대표자 성명을 입력해 주세요."),
