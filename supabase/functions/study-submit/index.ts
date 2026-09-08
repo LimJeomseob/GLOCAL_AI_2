@@ -159,7 +159,8 @@ const expertApplySchema = z.object({
   phone: phoneField,
   email: z.string().trim().email(),
   isNontenured: z.boolean().default(false),
-  experience: z.string().trim().min(20).max(4000),
+  // 신청 화면에서 교원 구분·경험 입력을 없앴다. 구버전 클라이언트 호환을 위해 값이 오면 그대로 저장한다.
+  experience: z.string().trim().max(4000).default(""),
   categories: z.array(z.enum(["초급", "중급", "고급1", "고급2"])).min(1).max(4),
   aiTools: z.string().trim().max(1000).default(""),
   availabilityConfirmed: z.literal(true),
