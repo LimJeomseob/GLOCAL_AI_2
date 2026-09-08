@@ -52,9 +52,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0020`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0021`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0020` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0021` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -70,8 +70,10 @@
      (`**` 는 하위 경로와 `?redirectedFrom=...` 쿼리스트링까지 매칭)
 5. Table Editor에서 `admin_users` 테이블에 관리자로 추가할 이메일이 들어있는지 확인
    (시드에 `eros4424@gmail.com` 포함됨. 추가 관리자는 이 테이블에 행을 더 넣으면 됩니다)
-   - **연구모임 심사위원**은 같은 테이블에 `role = 'reviewer'` 로 넣습니다. 심사위원은 관리자 포털에서
-     「계획서 심사」 탭만 보이고, 특강 신청자 데이터에는 접근할 수 없습니다.
+   - **연구모임 심사위원**은 총괄관리자(`superadmin`)가 관리자 포털의 「심사위원 관리」 탭에서 구글
+     계정 이메일을 등록합니다(`0021`). SQL로 넣으려면 같은 테이블에 `role = 'reviewer'` 행을 추가합니다.
+     심사위원은 관리자 포털에서 「계획서 심사」 탭만 보이고, 계획서 열람과 자기 채점 저장만 가능하며
+     특강 신청자 데이터에는 접근할 수 없습니다.
 
 ### 2. Edge Function 배포
 ```bash

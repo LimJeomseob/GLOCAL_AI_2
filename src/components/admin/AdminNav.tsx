@@ -15,6 +15,8 @@ const ADMIN_TABS: { href: string; label: string; roles?: AdminRole[] }[] = [
   { href: "/admin/survey", label: "만족도 설문결과", roles: ["admin", "superadmin"] },
   { href: "/admin/study-groups", label: "연구모임 관리", roles: ["admin", "superadmin"] },
   { href: "/admin/study-review", label: "계획서 심사" },
+  // 심사위원(구글 계정) 등록·삭제. 로그인 allowlist를 바꾸는 일이라 총괄관리자만.
+  { href: "/admin/reviewers", label: "심사위원 관리", roles: ["superadmin"] },
   { href: "/admin/study-progress", label: "연구모임 운영현황", roles: ["admin", "superadmin"] },
   // 교내 AI활용 전문가(코칭 강사) 신청 접수·선정. 개인정보가 있으므로 관리자 전용.
   { href: "/admin/expert-applicants", label: "전문가 신청자", roles: ["admin", "superadmin"] },

@@ -172,3 +172,10 @@ export interface AdminUser {
   email: string;
   role: AdminRole;
 }
+
+/** admin_users 전체 행. 심사위원 관리 탭(총괄관리자)에서 목록으로 읽을 때 쓴다. */
+export interface AdminUserRow extends AdminUser {
+  created_at: string;
+  /** 심사위원 관리 탭에서 등록한 총괄관리자 이메일. SQL로 넣은 행은 빈 문자열. */
+  created_by: string;
+}
