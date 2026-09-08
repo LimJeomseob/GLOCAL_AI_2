@@ -28,8 +28,6 @@ interface FormState {
   idNumber: string;
   phone: string;
   email: string;
-  isNontenured: boolean;
-  experience: string;
   categories: StudyCategory[];
   aiTools: string;
   availabilityConfirmed: boolean;
@@ -43,8 +41,6 @@ const INITIAL_STATE: FormState = {
   idNumber: "",
   phone: "",
   email: "",
-  isNontenured: false,
-  experience: "",
   categories: [],
   aiTools: "",
   availabilityConfirmed: false,
@@ -56,8 +52,8 @@ type FieldErrors = Partial<Record<keyof FormState | "roundId", string>>;
 /**
  * 교내 AI활용 전문가 신청서 — 탭 7.
  *
- * 공문에 별도 서식이 없어 공문 기재사항(성명·소속·직급·직번·연락처·이메일·교원 구분·
- * 생성형 AI 활용 경험)을 입력 항목으로 삼고, 연구모임별 맞춤 배정을 위해
+ * 공문에 별도 서식이 없어 공문 기재사항(성명·소속·직급·직번·연락처·이메일)을
+ * 입력 항목으로 삼고, 연구모임별 맞춤 배정을 위해
  * 지도 가능 카테고리와 주요 활용 AI 도구를 더 받는다.
  * 같은 직번·연락처로 다시 제출하면 기존 신청이 갱신된다(중복 접수 방지).
  */
@@ -129,8 +125,6 @@ export function StudyExpertApplyForm({ round }: { round: StudyRound }) {
       // phoneSchema가 010-####-####로 정규화한 값을 보낸다(재제출 본인확인 기준과 동일)
       phone: parsed.data.phone,
       email: parsed.data.email,
-      isNontenured: parsed.data.isNontenured,
-      experience: parsed.data.experience,
       // 화면 순서가 아니라 카테고리 정의 순서로 보낸다(관리자 화면·엑셀에서 정렬이 일정하도록)
       categories: categories.map((c) => c.key).filter((k) => parsed.data.categories.includes(k)),
       aiTools: parsed.data.aiTools,
@@ -309,59 +303,12 @@ export function StudyExpertApplyForm({ round }: { round: StudyRound }) {
               )}
             </FormField>
           </div>
-
-          <fieldset className="mt-5">
-            <legend className="text-sm font-semibold text-slate-800">교원 구분</legend>
-            <div className="mt-2 flex flex-wrap gap-5 text-sm text-slate-700">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="tenure"
-                  className="h-4 w-4 border-slate-300 text-accent focus:ring-accent"
-                  checked={!form.isNontenured}
-                  onChange={() => updateField("isNontenured", false)}
-                />
-                <span>전임교원</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="tenure"
-                  className="h-4 w-4 border-slate-300 text-accent focus:ring-accent"
-                  checked={form.isNontenured}
-                  onChange={() => updateField("isNontenured", true)}
-                />
-                <span>비전임교원</span>
-              </label>
-            </div>
-          </fieldset>
         </fieldset>
 
         <fieldset className="rounded-xl border border-slate-200 p-4 sm:p-5">
           <legend className="px-2 text-sm font-bold text-slate-800">전문 분야</legend>
 
-          <FormField
-            label="생성형 AI 활용 교수법 또는 연구 경험"
-            required
-            error={errors.experience}
-            hint="모집대상 요건입니다. 수업 적용 사례, 제작한 도구, 관련 연구·강의 경력 등을 적어 주세요. (20자 이상)"
-          >
-            {(inputProps) => (
-              <textarea
-                {...inputProps}
-                rows={6}
-                className={`${inputBaseClass} resize-y leading-relaxed`}
-                value={form.experience}
-                placeholder={`예: 2025학년도 OO과목에서 NotebookLM 기반 학습 도우미를 제작해 운영 / RAG 챗봇 제작 워크숍 강의 / 생성형 AI 활용 교수법 관련 논문·발표`}
-                onChange={(e) => updateField("experience", e.target.value)}
-              />
-            )}
-          </FormField>
-          <p className="-mt-3 text-right text-xs tabular-nums text-slate-400">
-            공백 제외 {form.experience.replace(/\s/g, "").length.toLocaleString()}자
-          </p>
-
-          <div className="mt-2 flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <p className="text-sm font-semibold text-slate-800">
               지도 가능 카테고리
               <span className="ml-1 text-red-600" aria-hidden="true">*</span>
@@ -486,9 +433,7 @@ export function StudyExpertApplyForm({ round }: { round: StudyRound }) {
         <dl className="mt-4 space-y-2 text-sm text-slate-700">
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 font-semibold text-slate-500">성명</dt>
-            <dd>
-              {form.name} <span className="text-slate-500">({form.isNontenured ? "비전임교원" : "전임교원"})</span>
-            </dd>
+            <dd>{form.name}</dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 font-semibold text-slate-500">소속·직급</dt>

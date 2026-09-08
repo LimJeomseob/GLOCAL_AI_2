@@ -108,12 +108,6 @@ export const studyExpertApplySchema = z.object({
   idNumber: z.string().trim().min(1, "직번을 입력해 주세요.").max(50),
   phone: phoneSchema,
   email: emailSchema,
-  isNontenured: z.boolean().default(false),
-  experience: z
-    .string()
-    .trim()
-    .min(20, "생성형 AI 활용 교수법 또는 연구 경험을 20자 이상 작성해 주세요.")
-    .max(4000, "경험은 4,000자 이내로 작성해 주세요."),
   categories: z
     .array(z.enum(STUDY_CATEGORIES as [string, ...string[]]))
     .min(1, "지도 가능 카테고리를 1개 이상 선택해 주세요.")
