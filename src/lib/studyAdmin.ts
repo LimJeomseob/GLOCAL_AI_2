@@ -202,6 +202,19 @@ export async function updateStudyGroupStatus(
 }
 
 /**
+ * 연구모임 신청 삭제(테스트 접수분 정리, 중복 접수 취소).
+ * 참여자·계획서·심사·회의록·결과보고서·산출물·알림은 FK on delete cascade로 함께 지워진다.
+ * 첨부파일은 Storage 버킷 `study-attachments`에 남으므로 대시보드에서 별도 정리해야 한다.
+ */
+export async function deleteStudyGroups(ids: string[]): Promise<string | null> {
+  if (ids.length === 0) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from(TABLES.STUDY_GROUPS).delete().in("id", ids);
+
+  return error ? error.message : null;
+}
+
+/**
  * 계획서 5번의 워크숍 희망일 교차집계.
  * 팀별 희망일을 (단계 × 날짜)로 모아 강사 배정안을 바로 뽑을 수 있게 한다.
  * 이 집계가 없으면 담당자가 10개 팀 계획서를 다시 읽어 손으로 취합해야 한다.
