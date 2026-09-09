@@ -8,7 +8,7 @@ const SITE_URL = (
 ).replace(/\/+$/, "");
 const TITLE = "2026학년도 2학기 AI 활용 연구모임 | 경상국립대학교 글로컬대학30";
 const DESCRIPTION =
-  "경상국립대학교 글로컬대학30 사업 — AI 활용 연구모임 신청·심사·운영 포털. 신청기간 2026. 9. 7. ~ 9. 18., 10개팀 최대 50명 선발";
+  "경상국립대학교 글로컬대학30 사업 — AI 활용 연구모임 신청·심사·운영 포털. 신청기간 2026. 9. 9. ~ 9. 18., 10개팀 최대 50명 선발";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
