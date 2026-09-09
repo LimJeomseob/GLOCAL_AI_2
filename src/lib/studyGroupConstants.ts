@@ -183,8 +183,8 @@ export const STUDY_SCHEDULE = [
   { period: "9. 7.(월)", label: "연구모임 신청 시작" },
   { period: "9. 18.(금)", label: "연구모임 신청 마감" },
   { period: "9. 19.(토) ~ 9. 25.(금)", label: "계획서 심사 및 선발 확정" },
-  { period: "9. 28.(월) ~ 11. 11.(금)", label: "연구모임 운영 (1차 기획 · 2차 제작 · 3차 환류)" },
-  { period: "11. 11.(금)", label: "결과보고서 제출 마감" },
+  { period: "9. 28.(월) ~ 11. 13.(금)", label: "연구모임 운영 (1차 기획 · 2차 제작 · 3차 환류)" },
+  { period: "11. 13.(금)", label: "결과보고서 제출 마감" },
   { period: "11월", label: "프로그램 결과보고 · 성과공유" },
 ] as const;
 
@@ -400,7 +400,7 @@ export const STUDY_EXPERT_OVERVIEW = [
   { label: "모집대상", value: "생성형 AI 활용 교수법 또는 연구 경험이 있는 본교 교원(비전임교원 포함)" },
   { label: "모집인원", value: "5명 내외" },
   { label: "신청기간", value: "´26. 9. 7.(월) ~ 9. 18.(금)" },
-  { label: "운영기간", value: "´26. 9. 28.(월) ~ 11. 11.(수) 중 3회" },
+  { label: "운영기간", value: "´26. 9. 28.(월) ~ 11. 13.(금) 중 3회" },
   { label: "지원사항", value: "소정의 강사료 및 유료계정 지원" },
 ] as const;
 
@@ -415,7 +415,7 @@ export const STUDY_EXPERT_HEADCOUNT = 5;
 
 /** 운영기간 중 3회 코칭 가능 확인 문구 */
 export const STUDY_EXPERT_AVAILABILITY_LABEL =
-  "운영기간(´26. 9. 28.(월) ~ 11. 11.(수)) 중 배정된 연구모임에 3회(기획·제작·환류) 교육 및 코칭이 가능합니다.";
+  "운영기간(´26. 9. 28.(월) ~ 11. 13.(금)) 중 배정된 연구모임에 3회(기획·제작·환류) 교육 및 코칭이 가능합니다.";
 
 export const STUDY_EXPERT_CONSENT_ITEMS = [
   "수집 항목: 성명·소속·직급·직번·연락처·이메일, 지도 가능 카테고리, 주요 활용 AI 도구",
