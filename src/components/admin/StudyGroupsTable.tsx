@@ -9,6 +9,7 @@ import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate, formatDateTime } from "@/lib/format";
 import {
   aggregateWorkshopDemand,
+  deleteStudyGroups,
   fetchStudyGroups,
   fetchStudyRounds,
   finalizeStudyReview,
@@ -44,6 +45,7 @@ export function StudyGroupsTable() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const detailTitleId = useId();
   const demandTitleId = useId();
@@ -83,6 +85,7 @@ export function StudyGroupsTable() {
   }, []);
 
   useEffect(() => {
+    setSelected(new Set());
     if (roundId) void load(roundId);
   }, [roundId, load]);
 
@@ -104,6 +107,16 @@ export function StudyGroupsTable() {
   const detail = groups.find((g) => g.id === detailId) ?? null;
   const demand = useMemo(() => aggregateWorkshopDemand(groups), [groups]);
 
+  /**
+   * 삭제는 화면에 보이는 행만 대상으로 한다 — 필터를 좁힌 뒤 「전체 선택」을 눌렀는데
+   * 필터 밖의 선택이 남아 함께 지워지면 담당자가 삭제 범위를 예측할 수 없다.
+   */
+  const selectedVisible = useMemo(
+    () => filtered.filter((g) => selected.has(g.id)),
+    [filtered, selected]
+  );
+  const allVisibleSelected = filtered.length > 0 && selectedVisible.length === filtered.length;
+
   async function handleStatusChange(groupId: string, status: string) {
     setBusy(true);
     setNotice(null);
@@ -117,6 +130,53 @@ export function StudyGroupsTable() {
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, status: status as StudyGroupStatus } : g))
     );
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) filtered.forEach((g) => next.delete(g.id));
+      else filtered.forEach((g) => next.add(g.id));
+      return next;
+    });
+  }
+
+  async function handleDelete() {
+    const targets = selectedVisible;
+    if (targets.length === 0) return;
+    if (
+      !window.confirm(
+        `선택한 ${targets.length}건을 삭제합니다.\n` +
+          `${targets.map((g) => `· ${g.code} ${g.name}`).join("\n")}\n\n` +
+          "참여자·계획서·심사·회의록·결과보고서·산출물도 함께 지워지며 되돌릴 수 없습니다. 계속할까요?"
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    const message = await deleteStudyGroups(targets.map((g) => g.id));
+    setBusy(false);
+
+    if (message) {
+      setError(message);
+      return;
+    }
+    setNotice(`${targets.length}건 삭제했습니다.`);
+    setSelected(new Set());
+    if (detailId && targets.some((g) => g.id === detailId)) setDetailId(null);
+    if (roundId) await load(roundId);
   }
 
   async function handleFinalize() {
@@ -201,6 +261,14 @@ export function StudyGroupsTable() {
           <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
             엑셀 내보내기 ({filtered.length})
           </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={handleDelete}
+            disabled={busy || loading || selectedVisible.length === 0}
+          >
+            선택 삭제 ({selectedVisible.length})
+          </Button>
           <Button variant="primary" size="sm" onClick={handleFinalize} disabled={busy || loading}>
             심사 집계·선발 확정
           </Button>
@@ -268,9 +336,19 @@ export function StudyGroupsTable() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table className="w-full min-w-[1160px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                <th scope="col" className="px-3 py-3 font-semibold">
+                  <input
+                    type="checkbox"
+                    aria-label="목록 전체 선택"
+                    className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                    checked={allVisibleSelected}
+                    disabled={filtered.length === 0}
+                    onChange={toggleAllVisible}
+                  />
+                </th>
                 <th scope="col" className="px-3 py-3 font-semibold">접수번호</th>
                 <th scope="col" className="px-3 py-3 font-semibold">모임명 / 주제</th>
                 <th scope="col" className="px-3 py-3 font-semibold">카테고리</th>
@@ -285,13 +363,22 @@ export function StudyGroupsTable() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
                     조건에 맞는 연구모임이 없습니다.
                   </td>
                 </tr>
               ) : (
                 filtered.map((g) => (
                   <tr key={g.id} className="border-b border-slate-100 last:border-b-0 align-top">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`${g.code} ${g.name} 선택`}
+                        className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                        checked={selected.has(g.id)}
+                        onChange={() => toggle(g.id)}
+                      />
+                    </td>
                     <td className="px-3 py-3 font-mono text-xs text-slate-600">{g.code}</td>
                     <td className="px-3 py-3">
                       <span className="block font-semibold text-slate-800">{g.name}</span>
