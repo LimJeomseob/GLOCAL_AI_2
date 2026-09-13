@@ -15,7 +15,11 @@ import {
   finalizeStudyReview,
   updateStudyGroupStatus,
 } from "@/lib/studyAdmin";
-import { STUDY_WORKSHOP_STEPS } from "@/lib/studyGroupConstants";
+import {
+  STUDY_EDUCATION_MODES,
+  STUDY_PROGRESS_METHODS,
+  STUDY_WORKSHOP_STEPS,
+} from "@/lib/studyGroupConstants";
 import {
   STUDY_GROUP_STATUSES,
   STUDY_STATUS_LABELS,
@@ -336,7 +340,7 @@ export function StudyGroupsTable() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[1160px] text-sm">
+          <table className="w-full min-w-[1360px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                 <th scope="col" className="px-3 py-3 font-semibold">
@@ -354,6 +358,8 @@ export function StudyGroupsTable() {
                 <th scope="col" className="px-3 py-3 font-semibold">카테고리</th>
                 <th scope="col" className="px-3 py-3 font-semibold">대표자</th>
                 <th scope="col" className="px-3 py-3 text-right font-semibold">인원</th>
+                <th scope="col" className="px-3 py-3 font-semibold">진행방법</th>
+                <th scope="col" className="px-3 py-3 font-semibold">교육형태</th>
                 <th scope="col" className="px-3 py-3 font-semibold">제출</th>
                 <th scope="col" className="px-3 py-3 text-right font-semibold">총점/순위</th>
                 <th scope="col" className="px-3 py-3 font-semibold">상태</th>
@@ -363,7 +369,7 @@ export function StudyGroupsTable() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={12} className="px-3 py-10 text-center text-slate-500">
                     조건에 맞는 연구모임이 없습니다.
                   </td>
                 </tr>
@@ -396,6 +402,18 @@ export function StudyGroupsTable() {
                           복수
                         </span>
                       )}
+                    </td>
+                    <td
+                      className="px-3 py-3 text-slate-700"
+                      title={STUDY_PROGRESS_METHODS.find((m) => m.key === g.progress_method)?.label}
+                    >
+                      {g.progress_method ?? "–"}
+                    </td>
+                    <td
+                      className="px-3 py-3 text-slate-700"
+                      title={STUDY_EDUCATION_MODES.find((m) => m.key === g.education_mode)?.label}
+                    >
+                      {g.education_mode ?? "–"}
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-600">
                       계획 {g.plan?.submitted_at ? "✓" : "–"} · 회의 {g.meetings.length} · 보고{" "}
@@ -447,6 +465,12 @@ export function StudyGroupsTable() {
                 {detail.leader_position})
               </span>
             </div>
+            <p className="mt-2 text-xs text-slate-500">
+              진행방법:{" "}
+              {STUDY_PROGRESS_METHODS.find((m) => m.key === detail.progress_method)?.label ?? "미선택"}
+              {" · "}교육형태:{" "}
+              {STUDY_EDUCATION_MODES.find((m) => m.key === detail.education_mode)?.label ?? "미선택"}
+            </p>
 
             <p className="mt-4 text-sm font-semibold text-slate-800">{detail.topic}</p>
 
