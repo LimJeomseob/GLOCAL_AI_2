@@ -467,6 +467,7 @@ export function StudyApplyForm({
                       type="text"
                       className={inputBaseClass}
                       value={member.affiliation}
+                      placeholder="예: 경상국립대학교 OO학과"
                       onChange={(e) => updateMember(index, "affiliation", e.target.value)}
                     />
                   )}

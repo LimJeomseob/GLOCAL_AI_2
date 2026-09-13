@@ -72,10 +72,28 @@ export function validateMembers(
   return null;
 }
 
-/** 참여자 소속의 distinct 개수 ≥ 2 → 복수 학과 가산점 대상 */
+/**
+ * 복수 학과 판정용 소속 정규화. DB의 normalize_study_affiliation()(마이그레이션 0023)과
+ * 같은 규칙·같은 순서여야 한다 — 어긋나면 신청 폼의 "가산점 대상" 안내와 저장값이 달라진다.
+ *   1. 소문자화·앞뒤 공백 제거
+ *   2. 대학명 문자열 제거(긴 것부터)
+ *   3. 공백 토큰 중 대학교/대학원/대학으로 끝나는 토큰 제거(단과대학·대학원 계층)
+ *   4. 남은 공백 전부 제거
+ * "경상국립대학교 의류학과" · "의류학과" · "경상국립대 의류학과"가 모두 "의류학과"로 모인다.
+ */
+export function normalizeAffiliation(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/(국립경상대학교|경상국립대학교|경상국립대|국립경상대|경상대학교|경상대|gnu)/g, "")
+    .replace(/\S*(대학교|대학원|대학)(?=\s|$)/g, "")
+    .replace(/\s+/g, "");
+}
+
+/** 정규화된 참여자 소속의 distinct 개수 ≥ 2 → 복수 학과 가산점 대상 */
 export function isMultiDepartment(members: { affiliation: string }[]): boolean {
   const departments = new Set(
-    members.map((m) => m.affiliation.trim()).filter((v) => v.length > 0)
+    members.map((m) => normalizeAffiliation(m.affiliation)).filter((v) => v.length > 0)
   );
   return departments.size >= 2;
 }
