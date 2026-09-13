@@ -200,6 +200,8 @@ export interface StudyGroup {
   period_end: string;
   member_count: number;
   is_multi_dept: boolean;
+  /** 복수 학과 판정 관리자 수동 보정. null=자동, true/false=관리자 확정값(is_multi_dept가 이 값을 따른다) */
+  multi_dept_override: boolean | null;
   has_nontenured: boolean;
   /** 윤리교육 게이트에서 작성한 8대 핵심원칙 실천 다짐. 도입 전 신청 건은 빈 배열 */
   ethics_pledges: StudyEthicsPledgeRecord[];

@@ -202,6 +202,28 @@ export async function updateStudyGroupStatus(
 }
 
 /**
+ * 복수 학과 판정 수동 보정. null이면 자동 판정으로 되돌린다.
+ * is_multi_dept는 DB 트리거(0023)가 재계산하므로 갱신된 최종값을 함께 돌려받아
+ * 화면이 다시 조회하지 않고도 배지를 맞출 수 있게 한다.
+ */
+export async function updateStudyGroupMultiDeptOverride(
+  groupId: string,
+  value: boolean | null
+): Promise<{ error: string | null; isMultiDept?: boolean }> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_GROUPS)
+    .update({ multi_dept_override: value })
+    .eq("id", groupId)
+    .select("is_multi_dept")
+    .single();
+
+  if (error) return { error: error.message };
+  const row = data as { is_multi_dept: boolean } | null;
+  return { error: null, isMultiDept: Boolean(row?.is_multi_dept) };
+}
+
+/**
  * 연구모임 신청 삭제(테스트 접수분 정리, 중복 접수 취소).
  * 참여자·계획서·심사·회의록·결과보고서·산출물·알림은 FK on delete cascade로 함께 지워진다.
  * 첨부파일은 Storage 버킷 `study-attachments`에 남으므로 대시보드에서 별도 정리해야 한다.

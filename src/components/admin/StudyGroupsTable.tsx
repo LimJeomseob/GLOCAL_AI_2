@@ -13,6 +13,7 @@ import {
   fetchStudyGroups,
   fetchStudyRounds,
   finalizeStudyReview,
+  updateStudyGroupMultiDeptOverride,
   updateStudyGroupStatus,
 } from "@/lib/studyAdmin";
 import {
@@ -53,6 +54,7 @@ export function StudyGroupsTable() {
 
   const detailTitleId = useId();
   const demandTitleId = useId();
+  const multiDeptSelectId = useId();
 
   useEffect(() => {
     let active = true;
@@ -133,6 +135,27 @@ export function StudyGroupsTable() {
     }
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, status: status as StudyGroupStatus } : g))
+    );
+  }
+
+  /** 복수 학과 판정 수동 보정 — "auto" | "yes" | "no" */
+  async function handleMultiDeptOverride(groupId: string, raw: string) {
+    const value = raw === "auto" ? null : raw === "yes";
+    setBusy(true);
+    setNotice(null);
+    const result = await updateStudyGroupMultiDeptOverride(groupId, value);
+    setBusy(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? { ...g, multi_dept_override: value, is_multi_dept: result.isMultiDept ?? g.is_multi_dept }
+          : g
+      )
     );
   }
 
@@ -226,6 +249,10 @@ export function StudyGroupsTable() {
         { header: "이메일", accessor: (g) => g.leader_email },
         { header: "참여인원", accessor: (g) => g.member_count },
         { header: "복수학과", accessor: (g) => (g.is_multi_dept ? "Y" : "N") },
+        {
+          header: "복수학과판정",
+          accessor: (g) => (typeof g.multi_dept_override === "boolean" ? "수동" : "자동"),
+        },
         { header: "비전임포함", accessor: (g) => (g.has_nontenured ? "Y" : "N") },
         { header: "진행방법", accessor: (g) => g.progress_method ?? "" },
         { header: "교육형태", accessor: (g) => g.education_mode ?? "" },
@@ -402,6 +429,11 @@ export function StudyGroupsTable() {
                           복수
                         </span>
                       )}
+                      {typeof g.multi_dept_override === "boolean" && (
+                        <span className="ml-1 text-[11px] text-slate-400" title="복수 학과 판정 관리자 수동 보정">
+                          수동
+                        </span>
+                      )}
                     </td>
                     <td
                       className="px-3 py-3 text-slate-700"
@@ -471,6 +503,38 @@ export function StudyGroupsTable() {
               {" · "}교육형태:{" "}
               {STUDY_EDUCATION_MODES.find((m) => m.key === detail.education_mode)?.label ?? "미선택"}
             </p>
+
+            {/* 복수 학과 판정 — 자동(소속 정규화 비교)이 놓친 표기 차이는 여기서 관리자가 확정한다 */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <label htmlFor={multiDeptSelectId} className="font-semibold text-slate-700">
+                복수학과 판정
+              </label>
+              <select
+                id={multiDeptSelectId}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                value={
+                  typeof detail.multi_dept_override === "boolean"
+                    ? detail.multi_dept_override
+                      ? "yes"
+                      : "no"
+                    : "auto"
+                }
+                disabled={busy}
+                onChange={(e) => void handleMultiDeptOverride(detail.id, e.target.value)}
+              >
+                <option value="auto">자동 판정</option>
+                <option value="yes">복수 학과 (수동)</option>
+                <option value="no">단일 학과 (수동)</option>
+              </select>
+              <span>
+                현재:{" "}
+                {detail.is_multi_dept ? (
+                  <span className="font-semibold text-amber-800">복수 학과 · 가산점 대상</span>
+                ) : (
+                  "단일 학과"
+                )}
+              </span>
+            </div>
 
             <p className="mt-4 text-sm font-semibold text-slate-800">{detail.topic}</p>
 
