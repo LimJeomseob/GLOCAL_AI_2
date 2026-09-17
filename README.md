@@ -30,8 +30,9 @@
   - `supabase/functions/issue-certificate` — 본인확인 후 이수 건 수료증 발급(발급번호 채번·서식 전달)
   - `supabase/functions/study-lookup` — 대표자 성명+연락처가 일치하는 연구모임과 그 팀의 계획서·회의록·
     결과보고서·산출물을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
-  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/expert-apply/plan/
-    meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `expert-apply`는 연구모임을 코칭할
+  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/
+    expert-apply/plan/meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `apply-edit`은 '내 연구모임'
+    탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `expert-apply`는 연구모임을 코칭할
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
     이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
     Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가
@@ -86,6 +87,10 @@ supabase functions deploy study-submit
 ```
 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 는 Supabase가 모든 Edge Function에
 자동으로 주입하므로 별도 시크릿 설정이 필요 없습니다.
+
+> `study-submit`을 고쳤다면 **프론트보다 먼저 재배포**하세요. 함수가 옛 버전이면 새 `kind`를 모르기 때문에
+> 화면에서 "입력값을 확인해 주세요."(400)만 돌아옵니다. 이 함수는 `_shared` import가 없는 단일 파일이라
+> Supabase 대시보드의 코드 편집기에 `index.ts`를 그대로 붙여넣어 배포해도 됩니다.
 
 ### 3. GitHub Pages 활성화
 1. 저장소 Settings → Pages → Build and deployment → **Source: GitHub Actions** 선택

@@ -1,4 +1,4 @@
-// 연구모임 제출 Edge Function — 신청서·전문가 신청·계획서·회의록·결과보고서·산출물의 유일한 공개 쓰기 경로.
+// 연구모임 제출 Edge Function — 신청서(신규·수정)·전문가 신청·계획서·회의록·결과보고서·산출물의 유일한 공개 쓰기 경로.
 //
 // study_* 테이블에는 익명 INSERT 정책이 없다. 연구모임 신청은 "모임 1건 + 참여자 3~5행 +
 // 계획서 1행"을 한 번에 만들고 접수번호를 되돌려줘야 해서 단일 INSERT로 끝나지 않고,
@@ -68,10 +68,8 @@ const ethicsPledgeSchema = z.object({
   pledge: z.string().trim().min(10).max(1000),
 });
 
-const applySchema = z.object({
-  kind: z.literal("apply"),
-  roundId: z.string().uuid(),
-  ...identity,
+/** [서식 1] 신청서 상단의 정형 항목 — 신규 신청(apply)과 수정(apply-edit)이 같은 규칙으로 검사한다 */
+const applyFields = {
   name: z.string().trim().min(2).max(60),
   topic: z.string().trim().min(2).max(120),
   category: z.enum(["초급", "중급", "고급1", "고급2"]),
@@ -81,8 +79,31 @@ const applySchema = z.object({
   leaderEmail: z.string().trim().email(),
   hasNontenured: z.boolean().default(false),
   members: z.array(memberSchema).min(1).max(20),
+};
+
+const applySchema = z.object({
+  kind: z.literal("apply"),
+  roundId: z.string().uuid(),
+  ...identity,
+  ...applyFields,
   // 윤리교육 게이트(8대 핵심원칙 중 3개 이상)를 통과해야 신청이 저장된다
   ethicsPledges: z.array(ethicsPledgeSchema).min(3).max(8),
+  consent: z.literal(true),
+});
+
+/**
+ * 신청서 수정 — '내 연구모임' 탭에서 본인확인을 거친 대표자가 저장된 신청서를 고친다.
+ * identity(leaderName/leaderPhone)는 본인확인용 "현재" 값이고, 저장할 새 성명·연락처는
+ * newLeaderName/newLeaderPhone으로 따로 받는다 — 두 값을 한 키로 받으면 verifyLeader가 모호해진다.
+ * 회차(roundId)는 받지 않는다: 저장된 모임의 round_id를 그대로 쓰며 회차 이동을 허용하지 않는다.
+ */
+const applyEditSchema = z.object({
+  kind: z.literal("apply-edit"),
+  groupId: z.string().uuid(),
+  ...identity,
+  ...applyFields,
+  newLeaderName: z.string().trim().min(1).max(50),
+  newLeaderPhone: phoneField,
   consent: z.literal(true),
 });
 
@@ -169,6 +190,7 @@ const expertApplySchema = z.object({
 
 const bodySchema = z.discriminatedUnion("kind", [
   applySchema,
+  applyEditSchema,
   expertApplySchema,
   planSchema,
   meetingSaveSchema,
@@ -186,7 +208,45 @@ function countChars(...sections: string[]): number {
 
 const IDENTITY_ERROR = "일치하는 연구모임이 없습니다. 대표자 성명과 연락처를 확인해 주세요.";
 
+/**
+ * 신청서([서식 1] 상단)를 대표자가 직접 고칠 수 있는 상태 — 심사 착수(under_review) 전까지.
+ * 클라이언트 상수 STUDY_APPLY_EDITABLE_STATUSES(src/lib/studyApi.ts)와 같은 값이어야 한다.
+ */
+const APPLY_EDITABLE_STATUSES = ["draft", "submitted"];
+
 type Client = ReturnType<typeof createClient>;
+
+type MemberInput = z.infer<typeof memberSchema>;
+
+/** 참여자 명단 공통 검사(팀 규모·직번 중복). 통과하면 null, 아니면 그대로 돌려줄 응답. */
+function validateRoster(members: MemberInput[], min: number, max: number): Response | null {
+  if (members.length < min || members.length > max) {
+    return jsonResponse(
+      { error: `참여자는 ${min}명 이상 ${max}명 이하로 구성해 주세요. (현재 ${members.length}명)` },
+      400
+    );
+  }
+
+  const idNumbers = members.map((m) => m.idNumber);
+  if (new Set(idNumbers).size !== idNumbers.length) {
+    return jsonResponse({ error: "참여자 직(학)번이 중복되었습니다." }, 400);
+  }
+
+  return null;
+}
+
+/** study_group_members 행으로 변환. 화면의 행 순서를 sort_order로 보존한다. */
+function toMemberRows(groupId: string, members: MemberInput[]) {
+  return members.map((m, index) => ({
+    group_id: groupId,
+    id_number: m.idNumber,
+    name: m.name,
+    affiliation: m.affiliation,
+    position: m.position,
+    is_leader: m.isLeader,
+    sort_order: index,
+  }));
+}
 
 /** 본인확인. 미존재/불일치를 같은 404로 통일해 팀 존재 여부를 노출하지 않는다. */
 async function verifyLeader(supabase: Client, groupId: string, leaderName: string, leaderPhone: string) {
@@ -239,19 +299,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "모집회차 정보를 확인할 수 없습니다." }, 400);
     }
 
-    const min = round.min_team_size as number;
-    const max = round.max_team_size as number;
-    if (body.members.length < min || body.members.length > max) {
-      return jsonResponse(
-        { error: `참여자는 ${min}명 이상 ${max}명 이하로 구성해 주세요. (현재 ${body.members.length}명)` },
-        400
-      );
-    }
-
-    const idNumbers = body.members.map((m) => m.idNumber);
-    if (new Set(idNumbers).size !== idNumbers.length) {
-      return jsonResponse({ error: "참여자 직(학)번이 중복되었습니다." }, 400);
-    }
+    const rosterError = validateRoster(
+      body.members,
+      round.min_team_size as number,
+      round.max_team_size as number
+    );
+    if (rosterError) return rosterError;
 
     const pledgeNos = body.ethicsPledges.map((p) => p.no);
     if (new Set(pledgeNos).size !== pledgeNos.length) {
@@ -326,17 +379,9 @@ Deno.serve(async (req: Request) => {
       code = created.code as string;
     }
 
-    const { error: memberError } = await supabase.from("study_group_members").insert(
-      body.members.map((m, index) => ({
-        group_id: groupId,
-        id_number: m.idNumber,
-        name: m.name,
-        affiliation: m.affiliation,
-        position: m.position,
-        is_leader: m.isLeader,
-        sort_order: index,
-      }))
-    );
+    const { error: memberError } = await supabase
+      .from("study_group_members")
+      .insert(toMemberRows(groupId, body.members));
 
     if (memberError) {
       console.error("[study-submit] 참여자 저장 실패:", memberError);
@@ -449,6 +494,94 @@ Deno.serve(async (req: Request) => {
   const verified = await verifyLeader(supabase, body.groupId, body.leaderName, body.leaderPhone);
   if ("error" in verified) return verified.error;
   const group = verified.group;
+
+  // --------------------------------------------------------------------------
+  // 1-3. 신청서 수정 ([서식 1] 상단) — 심사 착수 전(draft·submitted) + 신청 마감 전에만 열린다
+  // --------------------------------------------------------------------------
+  if (body.kind === "apply-edit") {
+    if (!APPLY_EDITABLE_STATUSES.includes(group.status)) {
+      const message =
+        group.status === "cancelled"
+          ? "취소된 신청입니다."
+          : "심사가 시작되어 신청서를 수정할 수 없습니다. 수정이 필요하면 AI융합원으로 문의해 주세요.";
+      return jsonResponse({ error: message }, 400);
+    }
+
+    const { data: round, error: roundError } = await supabase
+      .from("study_rounds")
+      .select("id, apply_close_at, min_team_size, max_team_size")
+      .eq("id", group.round_id)
+      .maybeSingle();
+
+    if (roundError || !round) {
+      return jsonResponse({ error: "모집회차 정보를 확인할 수 없습니다." }, 400);
+    }
+
+    // 트리거(check_study_group_submit)는 INSERT와 draft→submitted 전이에서만 마감을 검사하므로
+    // 기존 행의 항목 갱신은 여기서 직접 막아야 한다.
+    if (Date.now() > new Date(round.apply_close_at as string).getTime()) {
+      return jsonResponse({ error: "신청이 마감되어 신청서를 수정할 수 없습니다." }, 400);
+    }
+
+    const rosterError = validateRoster(
+      body.members,
+      round.min_team_size as number,
+      round.max_team_size as number
+    );
+    if (rosterError) return rosterError;
+
+    // 상태 조건을 다시 걸어 조회-갱신 사이의 경합에서 안전하게 실패시킨다. 참여자보다 먼저 갱신해
+    // 상태가 바뀐 모임의 명단만 지워지는 일이 없게 한다.
+    // round_id·period_*·ethics_pledges·consent·status·submitted_at은 건드리지 않는다.
+    const { data: updated, error: updateError } = await supabase
+      .from("study_groups")
+      .update({
+        name: body.name,
+        topic: body.topic,
+        category: body.category,
+        leader_name: body.newLeaderName,
+        leader_affiliation: body.leaderAffiliation,
+        leader_position: body.leaderPosition,
+        leader_id_number: body.leaderIdNumber,
+        leader_phone: body.newLeaderPhone,
+        leader_email: body.leaderEmail,
+        has_nontenured: body.hasNontenured,
+      })
+      .eq("id", body.groupId)
+      .in("status", APPLY_EDITABLE_STATUSES)
+      .select("id, code, status")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("[study-submit] 신청서 수정 실패:", updateError);
+      return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+    }
+    if (!updated) {
+      return jsonResponse({ error: "상태가 변경되었습니다. 다시 조회해 주세요." }, 400);
+    }
+
+    // 명단은 통째로 바꾼다(apply의 임시저장 갱신과 같은 방식). 삭제·삽입 사이에 DB 장애가 나면
+    // 명단이 비는데, 검증은 이미 통과한 뒤라 인프라 장애에 한한다 — 관리자 화면에서 복구한다.
+    await supabase.from("study_group_members").delete().eq("group_id", body.groupId);
+
+    const { error: memberError } = await supabase
+      .from("study_group_members")
+      .insert(toMemberRows(body.groupId, body.members));
+
+    if (memberError) {
+      console.error("[study-submit] 참여자 저장 실패:", memberError);
+      return jsonResponse({ error: "참여자 저장 중 오류가 발생했습니다." }, 500);
+    }
+
+    return jsonResponse({
+      ok: true,
+      groupId: body.groupId,
+      code: updated.code,
+      status: updated.status,
+      leaderName: body.newLeaderName,
+      leaderPhone: body.newLeaderPhone,
+    });
+  }
 
   // --------------------------------------------------------------------------
   // 2. 계획서 ([서식 1] 하단) — 임시저장 상태에서만 수정 가능, 제출하면 잠긴다

@@ -4,7 +4,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { deriveNextStep } from "@/lib/studyApi";
+import { canEditStudyApplication, deriveNextStep, deriveStudyRoundWindow } from "@/lib/studyApi";
 import { STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
 import { STUDY_STATUS_LABELS, type StudyGroupStatus, type StudyLookupResult } from "@/lib/studyTypes";
 
@@ -33,7 +33,17 @@ function timelineIndex(status: StudyGroupStatus): number {
  * 화면의 목적은 "지금 무엇을 해야 하는가" 하나를 분명히 하는 것이다.
  * 운영개요 ③단계 「운영 안내(시스템 안내)」가 이 화면으로 충족된다.
  */
-export function StudyGroupSummary({ group }: { group: StudyLookupResult }) {
+export function StudyGroupSummary({
+  group,
+  notice = null,
+  onEditApplication,
+}: {
+  group: StudyLookupResult;
+  /** 직전 동작의 결과 안내(예: 신청서 수정 완료) */
+  notice?: string | null;
+  /** 주어지면 「신청서 내용」에 수정 버튼을 띄운다. 실제 허용 여부는 이 컴포넌트가 다시 판정한다. */
+  onEditApplication?: () => void;
+}) {
   const next = deriveNextStep(group);
   const currentIndex = timelineIndex(group.status);
   const isRejected = group.status === "rejected";
@@ -42,8 +52,30 @@ export function StudyGroupSummary({ group }: { group: StudyLookupResult }) {
   const planDone = Boolean(group.plan?.submittedAt);
   const reportDone = Boolean(group.report?.submittedAt);
 
+  // 신청서 수정 가능 여부 — 심사 착수 전(draft·submitted) + 신청 마감 전.
+  // 최종 강제는 서버(study-submit의 apply-edit)가 서버 시각으로 다시 한다.
+  const applyWindow = group.round
+    ? deriveStudyRoundWindow({
+        apply_open_at: group.round.applyOpenAt,
+        apply_close_at: group.round.applyCloseAt,
+      })
+    : null;
+  const statusEditable = canEditStudyApplication(group.status);
+  const canEdit = Boolean(onEditApplication) && statusEditable && Boolean(applyWindow?.isOpen);
+  const categoryLabel =
+    group.round?.categories.find((c) => c.key === group.category)?.label ?? "";
+
   return (
     <div className="flex flex-col gap-6">
+      {notice && (
+        <p
+          role="status"
+          className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+        >
+          {notice}
+        </p>
+      )}
+
       {/* 다음 할 일 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">다음 할 일</h2>
@@ -111,6 +143,66 @@ export function StudyGroupSummary({ group }: { group: StudyLookupResult }) {
                 · 순위 <strong className="tabular-nums text-brand">{group.rank}</strong>위
               </>
             )}
+          </p>
+        )}
+      </section>
+
+      {/* 신청서 내용 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-sm font-bold text-slate-800">신청서 내용</h2>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={onEditApplication}>
+              신청서 수정
+            </Button>
+          )}
+        </div>
+
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">모임명</dt>
+            <dd className="mt-0.5 text-slate-800">{group.name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">수준별 카테고리</dt>
+            <dd className="mt-0.5 text-slate-800">
+              [{group.category}]{categoryLabel && ` ${categoryLabel}`}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-semibold text-slate-500">주제</dt>
+            <dd className="mt-0.5 text-slate-800">{group.topic}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-semibold text-slate-500">대표자</dt>
+            <dd className="mt-0.5 text-slate-800">
+              {[
+                group.leaderName,
+                group.leaderAffiliation,
+                group.leaderPosition,
+                group.leaderIdNumber,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">이메일</dt>
+            <dd className="mt-0.5 break-all text-slate-800">{group.leaderEmail}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">비전임 교원 포함</dt>
+            <dd className="mt-0.5 text-slate-800">{group.hasNontenured ? "포함" : "미포함"}</dd>
+          </div>
+        </dl>
+
+        {!canEdit && !isCancelled && (
+          <p className="mt-4 text-xs leading-relaxed text-slate-500">
+            {!statusEditable
+              ? "심사가 시작된 뒤에는 신청서를 수정할 수 없습니다. 수정이 필요하면 AI융합원으로 문의해 주세요."
+              : group.round
+              ? `신청 마감(${formatDateTime(group.round.applyCloseAt)}) 후에는 신청서를 수정할 수 없습니다.`
+              : null}
           </p>
         )}
       </section>

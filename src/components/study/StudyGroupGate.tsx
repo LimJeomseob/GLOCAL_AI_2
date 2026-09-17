@@ -18,8 +18,12 @@ import type { StudyIdentity, StudyLookupResult } from "@/lib/studyTypes";
 interface RenderArgs {
   group: StudyLookupResult;
   identity: StudyIdentity;
-  /** 제출 후 서버 상태를 다시 읽어 화면을 갱신한다. */
-  refresh: () => Promise<void>;
+  /**
+   * 제출 후 서버 상태를 다시 읽어 화면을 갱신한다.
+   * 신청서 수정으로 대표자 성명·연락처가 바뀌었다면 새 신원을 넘긴다 — 옛 신원으로 다시 조회하면
+   * 일치하는 모임이 없어 게이트가 닫혀 버린다.
+   */
+  refresh: (nextIdentity?: StudyIdentity) => Promise<void>;
 }
 
 interface StudyGroupGateProps {
@@ -68,6 +72,7 @@ export function StudyGroupGate({ title, description, children }: StudyGroupGateP
     }
 
     setIdentity(next);
+    setForm(next);
     setGroups(data);
     setSelectedId((prev) => (prev && data.some((g) => g.groupId === prev) ? prev : data[0].groupId));
     writeStudyIdentity(next);
@@ -85,9 +90,13 @@ export function StudyGroupGate({ title, description, children }: StudyGroupGateP
     }
   }, [runLookup]);
 
-  const refresh = useCallback(async () => {
-    if (identity) await runLookup(identity, { silent: true });
-  }, [identity, runLookup]);
+  const refresh = useCallback(
+    async (nextIdentity?: StudyIdentity) => {
+      const target = nextIdentity ?? identity;
+      if (target) await runLookup(target, { silent: true });
+    },
+    [identity, runLookup]
+  );
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

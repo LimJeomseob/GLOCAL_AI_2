@@ -123,6 +123,23 @@ export interface StudyRound {
   expert_apply_close_at: string | null;
 }
 
+/**
+ * 신청서 폼(StudyApplyForm)이 실제로 읽는 회차 정보만 추린 형태.
+ * 신규 신청은 study_rounds 원본(StudyRound)을, '내 연구모임'의 수정 모드는 조회 응답의
+ * round(StudyLookupRound)를 변환해 넘기므로 두 경로가 같은 타입으로 만난다.
+ */
+export type StudyApplyRoundInfo = Pick<
+  StudyRound,
+  | "id"
+  | "apply_open_at"
+  | "apply_close_at"
+  | "period_start"
+  | "period_end"
+  | "min_team_size"
+  | "max_team_size"
+  | "categories"
+>;
+
 // ---------------------------------------------------------------------------
 // 교내 AI활용 전문가 신청 (study_expert_applications, 0019)
 // ---------------------------------------------------------------------------
