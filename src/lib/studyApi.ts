@@ -4,9 +4,11 @@ import { createSupabaseBrowserClient } from "./supabase/client";
 import { extractFunctionError } from "./functionError";
 import { TABLES } from "./db-tables";
 import type {
+  StudyApplyRoundInfo,
   StudyGroupStatus,
   StudyIdentity,
   StudyLookupResult,
+  StudyLookupRound,
   StudyRound,
 } from "./studyTypes";
 
@@ -74,6 +76,23 @@ export function deriveStudyRoundWindow(
   const isNotYetOpen = t < new Date(round.apply_open_at).getTime();
   const isClosed = t > new Date(round.apply_close_at).getTime();
   return { isNotYetOpen, isClosed, isOpen: !isNotYetOpen && !isClosed };
+}
+
+/**
+ * 조회 응답의 회차(camelCase) → 신청서 폼이 읽는 형태(snake_case).
+ * '내 연구모임'의 신청서 수정 모드가 폼을 재사용하기 위한 어댑터다.
+ */
+export function toStudyApplyRoundInfo(round: StudyLookupRound): StudyApplyRoundInfo {
+  return {
+    id: round.id,
+    apply_open_at: round.applyOpenAt,
+    apply_close_at: round.applyCloseAt,
+    period_start: round.periodStart,
+    period_end: round.periodEnd,
+    min_team_size: round.minTeamSize,
+    max_team_size: round.maxTeamSize,
+    categories: round.categories,
+  };
 }
 
 export interface StudyExpertWindow extends StudyRoundWindow {
@@ -255,4 +274,15 @@ export const STUDY_OPERATION_STATUSES: StudyGroupStatus[] = ["selected", "in_pro
 
 export function canSubmitOperationDocs(status: StudyGroupStatus): boolean {
   return STUDY_OPERATION_STATUSES.includes(status);
+}
+
+/**
+ * 신청서([서식 1] 상단)를 대표자가 직접 고칠 수 있는 상태 — 심사 착수 전까지.
+ * 서버(study-submit의 APPLY_EDITABLE_STATUSES)와 같은 기준이며, 실제 강제는 서버가 한다.
+ * 신청 마감 전인지는 별도로 deriveStudyRoundWindow로 판정한다.
+ */
+export const STUDY_APPLY_EDITABLE_STATUSES: StudyGroupStatus[] = ["draft", "submitted"];
+
+export function canEditStudyApplication(status: StudyGroupStatus): boolean {
+  return STUDY_APPLY_EDITABLE_STATUSES.includes(status);
 }

@@ -15,7 +15,11 @@ import {
   STUDY_CONSENT_ITEMS,
   STUDY_SIGNATURE_ADDRESSEE,
 } from "@/lib/studyGroupConstants";
-import type { StudyRound } from "@/lib/studyTypes";
+import type {
+  StudyApplyRoundInfo,
+  StudyIdentity,
+  StudyLookupResult,
+} from "@/lib/studyTypes";
 
 interface FormState {
   name: string;
@@ -55,25 +59,90 @@ const EMPTY_MEMBER: StudyMemberInput = {
   isLeader: false,
 };
 
+/** 수정 모드의 초기값 — 폼 필드와 대표자를 뺀 참여자 행 */
+export interface StudyApplyInitialValues {
+  form: FormState;
+  members: StudyMemberInput[];
+}
+
 /**
- * [서식 1] 신청서 (근거문서 7페이지) — 신청 위저드 1단계.
+ * 조회 결과 + 본인확인 신원 → 수정 모드 초기값.
+ * 연락처는 조회 응답에 없으므로(개인정보 최소 노출) 조회에 성공한 신원 값을 쓴다.
+ */
+export function buildApplyInitialValues(
+  group: StudyLookupResult,
+  identity: StudyIdentity
+): StudyApplyInitialValues {
+  const sorted = [...group.members].sort((a, b) => a.sortOrder - b.sortOrder);
+  // 관리자가 등록해 is_leader가 비어 있는 건을 대비해 직번으로도 대표자 행을 걸러낸다.
+  const others = sorted.filter(
+    (m) => !m.isLeader && m.idNumber !== group.leaderIdNumber
+  );
+
+  return {
+    form: {
+      name: group.name,
+      topic: group.topic,
+      category: group.category,
+      leaderName: group.leaderName,
+      leaderAffiliation: group.leaderAffiliation,
+      leaderPosition: group.leaderPosition,
+      leaderIdNumber: group.leaderIdNumber,
+      leaderPhone: identity.leaderPhone,
+      leaderEmail: group.leaderEmail,
+      hasNontenured: group.hasNontenured,
+      consent: true,
+    },
+    members: others.map((m) => ({
+      idNumber: m.idNumber,
+      name: m.name,
+      affiliation: m.affiliation,
+      position: m.position,
+      isLeader: false,
+    })),
+  };
+}
+
+type StudyApplyFormProps =
+  | {
+      mode?: "create";
+      round: StudyApplyRoundInfo;
+      /** 윤리교육 게이트에서 작성한 8대 핵심원칙 실천 다짐(3개 이상) — 신청서와 함께 저장 */
+      ethicsPledges: StudyEthicsPledge[];
+    }
+  | {
+      mode: "edit";
+      round: StudyApplyRoundInfo;
+      groupId: string;
+      /** 본인확인을 통과한 "현재" 성명·연락처 — 서버가 소유자 확인에 쓴다 */
+      identity: StudyIdentity;
+      initial: StudyApplyInitialValues;
+      /** 저장 성공 후 호출. 성명·연락처를 바꿨을 수 있으므로 새 신원을 넘긴다. */
+      onSaved: (next: StudyIdentity) => void | Promise<void>;
+      onCancel: () => void;
+    };
+
+/**
+ * [서식 1] 신청서 (근거문서 7페이지) — 신청 위저드 1단계이자, '내 연구모임'의 신청서 수정 화면.
  *
  * 참여자 명단의 첫 행은 대표자로 고정해 자동 채운다. 서식에서 대표자와 참여자를 따로
  * 적게 되어 있어 두 곳의 이름이 어긋나는 사고가 잦은데, 시스템에서는 어긋날 수 없게 만든다.
  * 따라서 화면의 "참여자 추가"는 대표자를 뺀 나머지 인원을 다룬다.
+ *
+ * 수정 모드(mode="edit")는 같은 항목·같은 검증을 쓰고 저장 경로(kind)와 문구만 다르다.
+ * 윤리교육 다짐은 다시 받지 않고 저장된 값을 그대로 둔다.
  */
-export function StudyApplyForm({
-  round,
-  ethicsPledges,
-}: {
-  round: StudyRound;
-  /** 윤리교육 게이트에서 작성한 8대 핵심원칙 실천 다짐(3개 이상) — 신청서와 함께 저장 */
-  ethicsPledges: StudyEthicsPledge[];
-}) {
-  const [form, setForm] = useState<FormState>(INITIAL_STATE);
+export function StudyApplyForm(props: StudyApplyFormProps) {
+  const { round } = props;
+  const isEdit = props.mode === "edit";
+  const initial = props.mode === "edit" ? props.initial : null;
+
+  const [form, setForm] = useState<FormState>(initial?.form ?? INITIAL_STATE);
   // 최소 인원(대표자 포함 min)을 채우도록 대표자 외 (min-1)행을 미리 깔아 둔다.
   const [members, setMembers] = useState<StudyMemberInput[]>(
-    Array.from({ length: Math.max(round.min_team_size - 1, 0) }, () => ({ ...EMPTY_MEMBER }))
+    initial
+      ? initial.members
+      : Array.from({ length: Math.max(round.min_team_size - 1, 0) }, () => ({ ...EMPTY_MEMBER }))
   );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -153,18 +222,13 @@ export function StudyApplyForm({
       return;
     }
 
-    const { data, error } = await submitStudy<{ groupId: string; code: string }>({
-      kind: "apply",
-      roundId: round.id,
+    const common = {
       name: parsed.data.name,
       topic: parsed.data.topic,
       category: parsed.data.category,
-      leaderName: parsed.data.leaderName,
       leaderAffiliation: parsed.data.leaderAffiliation,
       leaderPosition: parsed.data.leaderPosition,
       leaderIdNumber: parsed.data.leaderIdNumber,
-      // phoneSchema가 010-####-####로 정규화한 값을 보낸다(본인확인 매칭 기준과 동일)
-      leaderPhone: parsed.data.leaderPhone,
       leaderEmail: parsed.data.leaderEmail,
       hasNontenured: parsed.data.hasNontenured,
       members: allMembers.map((m) => ({
@@ -174,9 +238,37 @@ export function StudyApplyForm({
         position: m.position.trim(),
         isLeader: m.isLeader,
       })),
-      ethicsPledges,
-      consent: true,
-    });
+      consent: true as const,
+    };
+
+    // 저장 뒤의 본인확인 기준이 되는 신원. 수정 모드에서 성명·연락처를 바꿨다면 새 값이다.
+    const nextIdentity = {
+      // phoneSchema가 010-####-####로 정규화한 값을 쓴다(본인확인 매칭 기준과 동일)
+      leaderName: parsed.data.leaderName,
+      leaderPhone: parsed.data.leaderPhone,
+    };
+
+    const payload =
+      props.mode === "edit"
+        ? {
+            kind: "apply-edit",
+            groupId: props.groupId,
+            // 소유자 확인은 "현재" 신원으로, 저장은 새 신원으로 한다.
+            leaderName: props.identity.leaderName,
+            leaderPhone: props.identity.leaderPhone,
+            newLeaderName: nextIdentity.leaderName,
+            newLeaderPhone: nextIdentity.leaderPhone,
+            ...common,
+          }
+        : {
+            kind: "apply",
+            roundId: round.id,
+            ...nextIdentity,
+            ...common,
+            ethicsPledges: props.ethicsPledges,
+          };
+
+    const { data, error } = await submitStudy<{ groupId: string; code: string }>(payload);
 
     setSubmitting(false);
     setConfirmOpen(false);
@@ -186,11 +278,13 @@ export function StudyApplyForm({
       return;
     }
 
-    // 탭 3에서 본인확인을 다시 입력하지 않도록 신원을 넘긴다(탭 종료 시 소멸).
-    writeStudyIdentity({
-      leaderName: parsed.data.leaderName,
-      leaderPhone: parsed.data.leaderPhone,
-    });
+    // 다음 탭·다음 조회에서 본인확인을 다시 입력하지 않도록 신원을 넘긴다(탭 종료 시 소멸).
+    writeStudyIdentity(nextIdentity);
+
+    if (props.mode === "edit") {
+      await props.onSaved(nextIdentity);
+      return;
+    }
     setResult({ code: data.code });
   }
 
@@ -224,9 +318,13 @@ export function StudyApplyForm({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 신청</h1>
+        <h1 className="text-xl font-bold text-brand sm:text-2xl">
+          {isEdit ? "신청서 수정" : "연구모임 신청"}
+        </h1>
         <p className="mt-2 text-sm text-slate-600 sm:text-base">
-          [서식 1] 신청서 항목입니다. 저장한 뒤 이어서 연구계획서를 작성하면 접수가 완료됩니다.
+          {isEdit
+            ? "[서식 1] 신청서 내용을 수정합니다. 저장하면 바로 반영됩니다."
+            : "[서식 1] 신청서 항목입니다. 저장한 뒤 이어서 연구계획서를 작성하면 접수가 완료됩니다."}
         </p>
       </div>
 
@@ -361,7 +459,11 @@ export function StudyApplyForm({
                 label="연락처"
                 required
                 error={errors.leaderPhone}
-                hint="이 연락처로 계획서·결과보고서 화면을 여는 본인확인을 합니다."
+                hint={
+                  isEdit
+                    ? "연락처를 바꾸면 이후 본인확인은 새 연락처로 합니다."
+                    : "이 연락처로 계획서·결과보고서 화면을 여는 본인확인을 합니다."
+                }
               >
                 {(inputProps) => (
                   <input
@@ -565,20 +667,44 @@ export function StudyApplyForm({
           </p>
         )}
 
-        <Button
-          type="submit"
-          variant="primary"
-          size="lg"
-          className="w-full"
-          disabled={submitting || !window_.isOpen}
-        >
-          저장하고 계획서 작성하기
-        </Button>
+        {isEdit ? (
+          <div className="flex flex-col gap-3 sm:flex-row-reverse">
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={submitting || !window_.isOpen}
+            >
+              수정 내용 저장
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={submitting}
+              onClick={() => props.mode === "edit" && props.onCancel()}
+            >
+              취소
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            className="w-full"
+            disabled={submitting || !window_.isOpen}
+          >
+            저장하고 계획서 작성하기
+          </Button>
+        )}
       </form>
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} titleId={confirmTitleId}>
         <h2 id={confirmTitleId} className="text-lg font-bold text-brand">
-          신청서 제출 확인
+          {isEdit ? "신청서 수정 확인" : "신청서 제출 확인"}
         </h2>
 
         <dl className="mt-4 space-y-2 text-sm text-slate-700">
@@ -602,7 +728,11 @@ export function StudyApplyForm({
           </div>
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 font-semibold text-slate-500">윤리교육</dt>
-            <dd>이수 · 핵심원칙 {ethicsPledges.length}개 실천 다짐 작성</dd>
+            <dd>
+              {props.mode === "edit"
+                ? "이수 · 기존 실천 다짐 유지"
+                : `이수 · 핵심원칙 ${props.ethicsPledges.length}개 실천 다짐 작성`}
+            </dd>
           </div>
         </dl>
 
@@ -620,7 +750,7 @@ export function StudyApplyForm({
           <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={submitting}>
             돌아가기
           </Button>
-          <Button variant="primary" onClick={handleConfirm} disabled={submitting}>
+          <Button variant="primary" onClick={() => void handleConfirm()} disabled={submitting}>
             {submitting ? "저장 중..." : "확인하고 저장"}
           </Button>
         </div>
