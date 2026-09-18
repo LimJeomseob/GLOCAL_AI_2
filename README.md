@@ -46,6 +46,10 @@
   Deno(Supabase Edge Function) 환경에서는 `@pdf-lib/fontkit`이 내부적으로
   `Object.prototype.__proto__` 조작에 의존하는 부분이 있어 Deno의 보안 기본값과 충돌해
   런타임에 실패하는 것을 배포 전 스모크 테스트로 확인했습니다 — 그래서 브라우저 실행으로 우회했습니다.
+- 연구모임 **신청서·연구계획서 제출본 PDF**(`src/lib/studyFormPdf.ts`)도 같은 방식으로 브라우저에서 만듭니다.
+  관리자 「연구모임 관리」 상세 팝업과 대표자 「내 연구모임」에서 각각 내려받으며, 폰트 로더는
+  `src/lib/pdfFonts.ts`로 수료증과 공유합니다. `public/fonts/`의 가공 폰트는
+  `scripts/process_cert_fonts.py`로만 만듭니다(가변 원본은 `--wght 400`/`--wght 700`으로 인스턴스화).
 - 관리자 인증: Supabase Auth 구글 OAuth + `admin_users` allowlist. 서버 미들웨어가 없으므로
   접근 통제는 클라이언트 라우트 가드(`useAdminSession`) + Supabase RLS(`is_admin()`)의 이중 구조입니다.
 

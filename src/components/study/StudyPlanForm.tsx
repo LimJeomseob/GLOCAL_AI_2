@@ -201,8 +201,8 @@ export function StudyPlanForm({
           ))}
         </ul>
         <p className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-500">
-          서체·줄간격은 제출본 PDF를 만들 때 서식(굴림 12pt · 줄간격 160%)으로 자동 적용되므로
-          화면에서는 신경 쓰지 않으셔도 됩니다. &quot;1페이지 이상&quot; 기준만
+          제출본 PDF(「내 연구모임」에서 내려받기)는 본문 12pt · 줄간격 160%로 자동 조판되므로
+          화면에서는 서체·줄간격을 신경 쓰지 않으셔도 됩니다. &quot;1페이지 이상&quot; 기준만
           <strong className="text-slate-700"> 공백 제외 {STUDY_PLAN_MIN_CHARS.toLocaleString()}자</strong>로
           환산해 확인합니다.
         </p>

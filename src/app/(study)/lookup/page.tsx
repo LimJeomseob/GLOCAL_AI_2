@@ -48,6 +48,7 @@ function StudyLookupBody({
   return (
     <StudyGroupSummary
       group={group}
+      identity={identity}
       notice={notice}
       onEditApplication={
         canEdit
