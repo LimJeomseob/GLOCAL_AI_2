@@ -2,7 +2,10 @@
 
 import { createSupabaseBrowserClient } from "./supabase/client";
 import { TABLES } from "./db-tables";
+import { countChars } from "./studyValidation";
+import type { StudyMemberInput, StudyPlanAdminInput } from "./studyValidation";
 import type {
+  StudyEthicsPledgeRecord,
   StudyExpertApplication,
   StudyExpertStatus,
   StudyGroup,
@@ -15,7 +18,25 @@ import type {
   StudyPriorParticipation,
   StudyReview,
   StudyRound,
+  WorkshopPreference,
 } from "./studyTypes";
+
+/**
+ * Postgres 오류를 담당자가 읽을 수 있는 문구로 바꾼다.
+ * 고유 제약(23505)은 어느 제약인지에 따라 원인이 전혀 다르므로 제약명으로 갈라 준다.
+ */
+function toAdminErrorMessage(error: { code?: string; message: string } | null): string | null {
+  if (!error) return null;
+  if (error.code === "23505") {
+    if (error.message.includes("study_expert_applications_round_id_number_key")) {
+      return "같은 회차에 이미 등록된 직번입니다. 기존 신청을 수정해 주세요.";
+    }
+    if (error.message.includes("study_group_members_unique_id_number")) {
+      return "같은 팀에 같은 직(학)번이 두 번 있습니다.";
+    }
+  }
+  return error.message;
+}
 
 /**
  * 관리자·심사위원 화면의 데이터 접근.
@@ -224,6 +245,114 @@ export async function updateStudyGroupMultiDeptOverride(
 }
 
 /**
+ * 관리자의 신청서 직접 수정.
+ *
+ * 공개 경로(study-submit `apply-edit`)는 심사 착수 전·신청 마감 전에만 열리므로, 그 밖의 정정은
+ * 이 경로로 처리한다. RLS(study_groups_admin_all)와 트리거의 관리자 예외(check_study_group_submit)가
+ * 이를 허용한다. 회차·연구기간·상태·제출시각·복수학과 보정값은 각각 다른 화면이 담당하므로 건드리지 않는다.
+ */
+export interface StudyGroupDetailsPatch {
+  name: string;
+  topic: string;
+  category: string;
+  leader_name: string;
+  leader_affiliation: string;
+  leader_position: string;
+  leader_id_number: string;
+  leader_phone: string;
+  leader_email: string;
+  has_nontenured: boolean;
+  progress_method: string | null;
+  education_mode: string | null;
+  ethics_pledges: StudyEthicsPledgeRecord[];
+}
+
+export async function updateStudyGroupDetails(
+  groupId: string,
+  patch: StudyGroupDetailsPatch
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from(TABLES.STUDY_GROUPS).update(patch).eq("id", groupId);
+
+  return toAdminErrorMessage(error);
+}
+
+/**
+ * 참여자 명단 교체.
+ *
+ * 공개 경로는 전체 삭제 후 삽입이라 그 사이에 장애가 나면 명단이 빈다. 관리자 화면은 그 사고를
+ * 복구하는 도구이므로 순서를 뒤집어, 먼저 upsert로 새 명단을 확정한 뒤 빠진 행만 지운다.
+ * member_count·is_multi_dept는 트리거(sync_study_group_members)가 재계산하므로 쓰지 않는다.
+ */
+export async function replaceStudyGroupMembers(
+  groupId: string,
+  existing: StudyGroupMember[],
+  next: StudyMemberInput[]
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+
+  const rows = next.map((member, index) => ({
+    group_id: groupId,
+    id_number: member.idNumber.trim(),
+    name: member.name.trim(),
+    affiliation: member.affiliation.trim(),
+    position: member.position.trim(),
+    is_leader: member.isLeader,
+    sort_order: index,
+  }));
+
+  const { error: upsertError } = await supabase
+    .from(TABLES.STUDY_GROUP_MEMBERS)
+    .upsert(rows, { onConflict: "group_id,id_number" });
+
+  if (upsertError) return toAdminErrorMessage(upsertError);
+
+  // 직번이 바뀐 행(대표자 직번 수정 포함)은 새 행으로 들어오므로 옛 행을 지워야 한다.
+  const keep = new Set(rows.map((r) => r.id_number));
+  const removeIds = existing.filter((m) => !keep.has(m.id_number)).map((m) => m.id);
+  if (removeIds.length === 0) return null;
+
+  const { error: deleteError } = await supabase
+    .from(TABLES.STUDY_GROUP_MEMBERS)
+    .delete()
+    .in("id", removeIds);
+
+  return toAdminErrorMessage(deleteError);
+}
+
+/**
+ * 계획서 저장. 계획서가 없던 팀이면 새로 만든다(제출 상태가 아닌 미제출 행으로 생성된다).
+ * submitted_at은 payload에 넣지 않아 기존 제출 시각이 보존된다.
+ */
+export async function upsertStudyGroupPlan(
+  groupId: string,
+  input: StudyPlanAdminInput
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from(TABLES.STUDY_GROUP_PLANS).upsert(
+    {
+      group_id: groupId,
+      section1_topic: input.section1Topic,
+      section2_purpose: input.section2Purpose,
+      section3_platform: input.section3Platform,
+      section4_effect: input.section4Effect,
+      section5_etc: input.section5Etc,
+      workshop_pref: input.workshopPref as WorkshopPreference,
+      char_count: countChars(
+        input.section1Topic,
+        input.section2Purpose,
+        input.section3Platform,
+        input.section4Effect,
+        input.section5Etc
+      ),
+    },
+    { onConflict: "group_id" }
+  );
+
+  return toAdminErrorMessage(error);
+}
+
+/**
  * 연구모임 신청 삭제(테스트 접수분 정리, 중복 접수 취소).
  * 참여자·계획서·심사·회의록·결과보고서·산출물·알림은 FK on delete cascade로 함께 지워진다.
  * 첨부파일은 Storage 버킷 `study-attachments`에 남으므로 대시보드에서 별도 정리해야 한다.
@@ -291,10 +420,31 @@ export async function fetchStudyExpertApplications(
   return (data ?? []) as StudyExpertApplication[];
 }
 
-/** 선정·미선정 처리와 관리자 메모(배정 팀 등). 트리거는 관리자(is_admin)에게 구간 검사를 면제한다. */
+/**
+ * 선정·미선정 처리, 관리자 메모(배정 팀 등), 신청 내용 정정.
+ * 트리거는 관리자(is_admin)에게 신청 구간 검사를 면제하므로 마감 후에도 고칠 수 있다.
+ */
+export type StudyExpertApplicationPatch = Partial<
+  Pick<
+    StudyExpertApplication,
+    | "name"
+    | "affiliation"
+    | "position"
+    | "id_number"
+    | "phone"
+    | "email"
+    | "is_nontenured"
+    | "experience"
+    | "categories"
+    | "ai_tools"
+    | "status"
+    | "note"
+  >
+> & { status?: StudyExpertStatus };
+
 export async function updateStudyExpertApplication(
   id: string,
-  patch: { status?: StudyExpertStatus; note?: string }
+  patch: StudyExpertApplicationPatch
 ): Promise<string | null> {
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase
@@ -302,7 +452,46 @@ export async function updateStudyExpertApplication(
     .update(patch)
     .eq("id", id);
 
-  return error ? error.message : null;
+  return toAdminErrorMessage(error);
+}
+
+/**
+ * 관리자 직접 등록(오프라인·유선 접수 소급 등록).
+ * 접수번호(code)는 보내지 않는다 — 트리거(check_study_expert_apply)가 EX-{연도}-{학기}-{연번}으로 채번한다.
+ * availability_confirmed·consent는 DB CHECK가 true를 요구하므로, 화면에서 담당자가 오프라인 확인을
+ * 체크한 경우에만 이 함수를 호출한다.
+ */
+export async function createStudyExpertApplication(
+  roundId: string,
+  input: Omit<StudyExpertApplicationPatch, "status"> & { status: StudyExpertStatus }
+): Promise<{ row: StudyExpertApplication | null; error: string | null }> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_EXPERT_APPLICATIONS)
+    .insert({
+      round_id: roundId,
+      experience: "",
+      ...input,
+      availability_confirmed: true,
+      consent: true,
+    })
+    .select("*")
+    .single();
+
+  if (error) return { row: null, error: toAdminErrorMessage(error) };
+  return { row: data as StudyExpertApplication, error: null };
+}
+
+/** 전문가 신청 삭제(중복·테스트 접수 정리). 이 테이블을 참조하는 FK는 없다. */
+export async function deleteStudyExpertApplications(ids: string[]): Promise<string | null> {
+  if (ids.length === 0) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_EXPERT_APPLICATIONS)
+    .delete()
+    .in("id", ids);
+
+  return toAdminErrorMessage(error);
 }
 
 // ---------------------------------------------------------------------------

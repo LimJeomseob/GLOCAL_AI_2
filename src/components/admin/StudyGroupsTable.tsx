@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { inputBaseClass } from "@/components/ui/FormField";
+import { StudyGroupEditModal } from "@/components/admin/StudyGroupEditModal";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -48,6 +49,7 @@ export function StudyGroupsTable() {
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -111,6 +113,8 @@ export function StudyGroupsTable() {
   }, [groups, statusFilter, categoryFilter, search]);
 
   const detail = groups.find((g) => g.id === detailId) ?? null;
+  // 편집 대상도 목록에서 파생해 재조회 후 최신 값을 보게 한다.
+  const editTarget = groups.find((g) => g.id === editId) ?? null;
   const demand = useMemo(() => aggregateWorkshopDemand(groups), [groups]);
 
   /**
@@ -592,14 +596,42 @@ export function StudyGroupsTable() {
               <p className="mt-2 text-sm text-slate-500">작성된 계획서가 없습니다.</p>
             )}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => setDetailId(null)}>
                 닫기
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditId(detail.id);
+                  setDetailId(null);
+                }}
+              >
+                수정
               </Button>
             </div>
           </>
         )}
       </Modal>
+
+      {/* 수정 — 신청서·참여자·윤리 다짐·계획서를 관리자가 직접 고친다(공개 수정 경로가 닫힌 뒤의 정정) */}
+      {editTarget && round && (
+        <StudyGroupEditModal
+          key={editTarget.id}
+          group={editTarget}
+          round={round}
+          onClose={() => setEditId(null)}
+          onSaved={async () => {
+            const savedId = editTarget.id;
+            const savedCode = editTarget.code;
+            setEditId(null);
+            setError(null);
+            if (roundId) await load(roundId);
+            setNotice(`${savedCode} 신청 내용을 저장했습니다.`);
+            setDetailId(savedId);
+          }}
+        />
+      )}
 
       {/* 워크숍 희망일 교차집계 — 강사 배정안의 기초 자료 */}
       <Modal open={demandOpen} onClose={() => setDemandOpen(false)} titleId={demandTitleId}>

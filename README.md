@@ -53,9 +53,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0020`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0023`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0020` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0023` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -120,6 +120,12 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
   `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup` · `/expert-apply`(교내 AI활용 전문가 신청)
 - `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 · 전문가 신청자 ·
   참여이력 관리 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
+  - 공개 수정 경로(`study-submit`)는 신청 마감·심사 착수 전까지만 열리므로, 그 뒤의 정정은 관리자 화면에서
+    합니다. **연구모임 관리**의 상세 팝업에서 신청서·참여자·윤리 다짐·계획서를 직접 고치고,
+    **전문가 신청자** 탭에서 접수 건을 추가·수정·삭제합니다. 두 경로 모두 Edge Function을 거치지 않고
+    관리자 브라우저에서 RLS `is_admin()`으로 테이블을 직접 갱신하며(`src/lib/studyAdmin.ts`),
+    접수 구간·팀 규모 검사는 DB 트리거가 관리자에게 면제합니다(`0013`·`0019`).
+    인원(`member_count`)과 복수학과(`is_multi_dept`)는 트리거가 재계산하므로 화면에서 쓰지 않습니다.
 - `src/lib/study*.ts` · `src/components/study` — 연구모임 전용 상수·타입·검증·데이터 접근·컴포넌트
 - `src/lib/constants.ts`의 `PROGRAM_NAME`은 **수료증 서식과 기존 신청 데이터가 쓰는 특강 명칭**이라
   바꾸면 과거 수료증과 표기가 어긋납니다. 화면 상단 명칭은 `STUDY_PROGRAM_NAME`을 씁니다.
