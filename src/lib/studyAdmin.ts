@@ -2,6 +2,7 @@
 
 import { createSupabaseBrowserClient } from "./supabase/client";
 import { TABLES } from "./db-tables";
+import { extractFunctionError } from "./functionError";
 import { countChars } from "./studyValidation";
 import type { StudyMemberInput, StudyPlanAdminInput } from "./studyValidation";
 import type {
@@ -13,6 +14,11 @@ import type {
   StudyGroupPlan,
   StudyGroupWithRelations,
   StudyMeeting,
+  StudyNotification,
+  StudyNotificationStatus,
+  StudyNotificationTemplate,
+  StudyNotificationTemplateStage,
+  StudyNotificationWithGroup,
   StudyOutput,
   StudyReport,
   StudyPriorParticipation,
@@ -608,4 +614,140 @@ export function parsePriorParticipationPaste(text: string): {
   });
 
   return { rows, errors };
+}
+
+// ---------------------------------------------------------------------------
+// 대표자 안내 메일 큐 (study_notifications + study_notification_templates, 0024)
+//
+// 큐 행은 DB 트리거가 만들고, 관리자는 여기서 내용을 확인·수정한 뒤 승인 발송한다.
+// 실제 발송은 Edge Function study-notify(Resend)가 하며, 브라우저는 행을 갱신하지 않는다.
+// ---------------------------------------------------------------------------
+
+/** 큐 전체 + 모임 식별 정보. 모임이 삭제되면 cascade로 큐 행도 사라지므로 조인 실패는 없다. */
+export async function fetchStudyNotifications(): Promise<StudyNotificationWithGroup[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_NOTIFICATIONS)
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as StudyNotification[];
+  if (rows.length === 0) return [];
+
+  const groupIds = Array.from(new Set(rows.map((r) => r.group_id)));
+  const { data: groups, error: groupError } = await supabase
+    .from(TABLES.STUDY_GROUPS)
+    .select("id, code, name, leader_name")
+    .in("id", groupIds);
+
+  if (groupError) throw new Error(groupError.message);
+  const byId = new Map(
+    ((groups ?? []) as { id: string; code: string; name: string; leader_name: string }[]).map((g) => [g.id, g])
+  );
+
+  return rows.map((r) => {
+    const g = byId.get(r.group_id);
+    return {
+      ...r,
+      group_code: g?.code ?? "",
+      group_name: g?.name ?? "",
+      leader_name: g?.leader_name ?? "",
+    };
+  });
+}
+
+export interface StudyNotificationPatch {
+  subject?: string;
+  body?: string;
+  recipient?: string;
+  status?: StudyNotificationStatus;
+}
+
+/** 승인 전 내용 수정·취소·재시도(실패→대기). 성공 행은 이력이므로 화면이 편집을 열지 않는다. */
+export async function updateStudyNotification(
+  id: string,
+  patch: StudyNotificationPatch
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from(TABLES.STUDY_NOTIFICATIONS).update(patch).eq("id", id);
+  return error ? error.message : null;
+}
+
+export async function updateStudyNotificationsStatus(
+  ids: string[],
+  status: StudyNotificationStatus
+): Promise<string | null> {
+  if (ids.length === 0) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_NOTIFICATIONS)
+    .update({ status })
+    .in("id", ids);
+  return error ? error.message : null;
+}
+
+export async function fetchStudyNotificationTemplates(): Promise<StudyNotificationTemplate[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_NOTIFICATION_TEMPLATES)
+    .select("*")
+    .order("stage");
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudyNotificationTemplate[];
+}
+
+export async function updateStudyNotificationTemplate(
+  stage: StudyNotificationTemplateStage,
+  patch: { subject?: string; body?: string; enabled?: boolean }
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_NOTIFICATION_TEMPLATES)
+    .update(patch)
+    .eq("stage", stage);
+  return error ? error.message : null;
+}
+
+export interface StudyNotifySendResult {
+  id: string;
+  ok: boolean;
+  error: string;
+}
+
+/**
+ * 승인 발송. Edge Function이 행 상태를 갱신하므로 호출 후 목록을 다시 읽는다.
+ * 한 번에 최대 50건 — 그 이상은 화면이 나눠 부른다.
+ */
+export async function sendStudyNotifications(
+  ids: string[]
+): Promise<{ results: StudyNotifySendResult[]; error: string | null }> {
+  if (ids.length === 0) return { results: [], error: null };
+  const supabase = createSupabaseBrowserClient();
+  try {
+    const { data, error } = await supabase.functions.invoke("study-notify", {
+      body: { action: "send", ids },
+    });
+    if (error) {
+      return { results: [], error: await extractFunctionError(error, "발송 요청에 실패했습니다.") };
+    }
+    return { results: (data?.results ?? []) as StudyNotifySendResult[], error: null };
+  } catch {
+    return { results: [], error: "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+}
+
+/** 테스트 발송 — 행 상태를 바꾸지 않고 지정 주소로만 보낸다. */
+export async function sendStudyNotificationTest(id: string, to: string): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  try {
+    const { error } = await supabase.functions.invoke("study-notify", {
+      body: { action: "test", id, to },
+    });
+    if (error) return await extractFunctionError(error, "테스트 발송에 실패했습니다.");
+    return null;
+  } catch {
+    return "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+  }
 }

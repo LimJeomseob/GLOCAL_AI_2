@@ -20,6 +20,8 @@ const ADMIN_TABS: { href: string; label: string; roles?: AdminRole[] }[] = [
   { href: "/admin/expert-applicants", label: "전문가 신청자", roles: ["admin", "superadmin"] },
   // 심사기준 1번의 근거 대장. 심사위원은 심사 화면에서 결과만 보면 되므로 관리자 전용으로 둔다.
   { href: "/admin/prior-participation", label: "참여이력 관리", roles: ["admin", "superadmin"] },
+  // 대표자 안내 메일 큐 — 상태 전이가 자동으로 쌓은 안내를 관리자가 확인·승인해 발송한다.
+  { href: "/admin/notifications", label: "안내 발송", roles: ["admin", "superadmin"] },
 ];
 
 export function AdminNav({ role }: { role?: AdminRole }) {
