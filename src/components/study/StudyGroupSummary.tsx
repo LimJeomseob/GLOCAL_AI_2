@@ -1,12 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
+import { downloadPdf } from "@/lib/download";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { canEditStudyApplication, deriveNextStep, deriveStudyRoundWindow } from "@/lib/studyApi";
+import {
+  buildStudyApplicationPdf,
+  buildStudyPlanPdf,
+  lookupGroupToPdfData,
+  studyPdfFilename,
+} from "@/lib/studyFormPdf";
 import { STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
-import { STUDY_STATUS_LABELS, type StudyGroupStatus, type StudyLookupResult } from "@/lib/studyTypes";
+import {
+  STUDY_STATUS_LABELS,
+  type StudyGroupStatus,
+  type StudyIdentity,
+  type StudyLookupResult,
+} from "@/lib/studyTypes";
 
 /** 타임라인에 표시할 정상 경로. 미선발·취소는 분기이므로 별도 처리한다. */
 const TIMELINE: StudyGroupStatus[] = [
@@ -35,15 +48,37 @@ function timelineIndex(status: StudyGroupStatus): number {
  */
 export function StudyGroupSummary({
   group,
+  identity,
   notice = null,
   onEditApplication,
 }: {
   group: StudyLookupResult;
+  /** 본인확인에 쓴 신원. 조회 응답에 없는 대표자 연락처를 제출본 PDF에 싣기 위해 받는다. */
+  identity?: StudyIdentity;
   /** 직전 동작의 결과 안내(예: 신청서 수정 완료) */
   notice?: string | null;
   /** 주어지면 「신청서 내용」에 수정 버튼을 띄운다. 실제 허용 여부는 이 컴포넌트가 다시 판정한다. */
   onEditApplication?: () => void;
 }) {
+  const [pdfBusy, setPdfBusy] = useState<"application" | "plan" | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  /** 제출본 PDF — 브라우저에서 생성해 바로 내려받는다. */
+  async function handleDownloadPdf(kind: "application" | "plan") {
+    setPdfBusy(kind);
+    setPdfError(null);
+    try {
+      const data = lookupGroupToPdfData(group, identity);
+      const bytes =
+        kind === "application" ? await buildStudyApplicationPdf(data) : await buildStudyPlanPdf(data);
+      downloadPdf(studyPdfFilename(group.code, kind), bytes);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "PDF를 생성하지 못했습니다.");
+    } finally {
+      setPdfBusy(null);
+    }
+  }
+
   const next = deriveNextStep(group);
   const currentIndex = timelineIndex(group.status);
   const isRejected = group.status === "rejected";
@@ -151,12 +186,27 @@ export function StudyGroupSummary({
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">신청서 내용</h2>
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={onEditApplication}>
-              신청서 수정
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleDownloadPdf("application")}
+              disabled={pdfBusy !== null}
+            >
+              {pdfBusy === "application" ? "생성 중..." : "신청서 PDF"}
             </Button>
-          )}
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={onEditApplication} disabled={pdfBusy !== null}>
+                신청서 수정
+              </Button>
+            )}
+          </div>
         </div>
+        {pdfError && (
+          <p role="alert" className="mt-3 text-sm font-medium text-red-600">
+            {pdfError}
+          </p>
+        )}
 
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -219,6 +269,17 @@ export function StudyGroupSummary({
             {group.plan?.submittedAt && (
               <dd className="mt-1 text-xs text-slate-500">{formatDateTime(group.plan.submittedAt)}</dd>
             )}
+            <dd className="mt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleDownloadPdf("plan")}
+                disabled={pdfBusy !== null || !group.plan}
+                title={group.plan ? undefined : "작성된 계획서가 없습니다."}
+              >
+                {pdfBusy === "plan" ? "생성 중..." : "계획서 PDF"}
+              </Button>
+            </dd>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">

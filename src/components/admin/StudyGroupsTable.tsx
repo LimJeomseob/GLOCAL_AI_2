@@ -7,7 +7,14 @@ import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyGroupEditModal } from "@/components/admin/StudyGroupEditModal";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { exportRowsAsCsv } from "@/lib/csv";
+import { downloadPdf } from "@/lib/download";
 import { formatDate, formatDateTime } from "@/lib/format";
+import {
+  adminGroupToPdfData,
+  buildStudyApplicationPdf,
+  buildStudyPlanPdf,
+  studyPdfFilename,
+} from "@/lib/studyFormPdf";
 import {
   aggregateWorkshopDemand,
   deleteStudyGroups,
@@ -52,6 +59,8 @@ export function StudyGroupsTable() {
   const [editId, setEditId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 상세 모달 안에서 보여줄 PDF 생성 오류. 페이지 상단 error 배너는 모달 뒤에 가려진다.
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const detailTitleId = useId();
@@ -161,6 +170,22 @@ export function StudyGroupsTable() {
           : g
       )
     );
+  }
+
+  /** 제출본 PDF — 브라우저에서 생성해 바로 내려받는다(수료증과 같은 경로). */
+  async function handleDownloadPdf(group: StudyGroupWithRelations, kind: "application" | "plan") {
+    setBusy(true);
+    setPdfError(null);
+    try {
+      const data = adminGroupToPdfData(group);
+      const bytes =
+        kind === "application" ? await buildStudyApplicationPdf(data) : await buildStudyPlanPdf(data);
+      downloadPdf(studyPdfFilename(group.code, kind), bytes);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "PDF를 생성하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function toggle(id: string) {
@@ -488,7 +513,14 @@ export function StudyGroupsTable() {
       )}
 
       {/* 상세 — 신청서 + 계획서 + 참여자를 한 화면에서 확인 */}
-      <Modal open={Boolean(detail)} onClose={() => setDetailId(null)} titleId={detailTitleId}>
+      <Modal
+        open={Boolean(detail)}
+        onClose={() => {
+          setDetailId(null);
+          setPdfError(null);
+        }}
+        titleId={detailTitleId}
+      >
         {detail && (
           <>
             <h2 id={detailTitleId} className="text-lg font-bold text-brand">
@@ -596,12 +628,37 @@ export function StudyGroupsTable() {
               <p className="mt-2 text-sm text-slate-500">작성된 계획서가 없습니다.</p>
             )}
 
+            {pdfError && (
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              >
+                {pdfError}
+              </p>
+            )}
+
             <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button variant="outline" onClick={() => setDetailId(null)}>
+              <Button variant="outline" onClick={() => setDetailId(null)} disabled={busy}>
                 닫기
               </Button>
               <Button
+                variant="outline"
+                onClick={() => void handleDownloadPdf(detail, "application")}
+                disabled={busy}
+              >
+                신청서 PDF
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleDownloadPdf(detail, "plan")}
+                disabled={busy || !detail.plan}
+                title={detail.plan ? undefined : "작성된 계획서가 없습니다."}
+              >
+                계획서 PDF
+              </Button>
+              <Button
                 variant="primary"
+                disabled={busy}
                 onClick={() => {
                   setEditId(detail.id);
                   setDetailId(null);

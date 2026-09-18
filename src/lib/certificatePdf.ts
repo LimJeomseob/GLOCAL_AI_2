@@ -2,6 +2,7 @@
 
 import { PROGRAM_NAME } from "@/lib/constants";
 import { formatCertIssueDate, formatCertPeriod } from "@/lib/format";
+import { loadKoreanFonts } from "@/lib/pdfFonts";
 import type { CertificateTemplate } from "@/lib/types";
 
 // 이 앱은 완전 정적(GitHub Pages) 배포라 서버가 없다. 수료증 PDF는 발급하는 사람의
@@ -10,25 +11,7 @@ import type { CertificateTemplate } from "@/lib/types";
 // 조작에 의존하는 부분이 있어 Deno의 보안 기본값과 충돌해 런타임에 실패하는 것을
 // 실제 배포 전 스모크 테스트로 확인했다 — 그래서 브라우저 실행으로 우회한다.
 //
-// 폰트는 반드시 public/fonts/의 가공본(scripts/process_cert_fonts.py 산출물)을 쓴다.
-// @pdf-lib/fontkit의 TTFSubset은 홀수 길이 글리프 뒤에 패딩을 넣지 않아 short-loca
-// 서브셋이 1바이트씩 밀리며 글자가 깨진다 — 가공본은 모든 글리프를 짝수 길이로
-// 패딩(glyf.padding=2)해 이 버그를 원천 회피한다. 원본 CDN TTF를 그대로 쓰면 안 된다.
-const FONT_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const FONT_REGULAR_URL = `${FONT_BASE}/fonts/NotoSansKR-Regular-Cert.ttf`;
-const FONT_BOLD_URL = `${FONT_BASE}/fonts/NotoSansKR-Bold-Cert.ttf`;
-
-let cachedFonts: { regular: ArrayBuffer; bold: ArrayBuffer } | null = null;
-
-async function loadFonts() {
-  if (cachedFonts) return cachedFonts;
-  const [regular, bold] = await Promise.all([
-    fetch(FONT_REGULAR_URL).then((r) => r.arrayBuffer()),
-    fetch(FONT_BOLD_URL).then((r) => r.arrayBuffer()),
-  ]);
-  cachedFonts = { regular, bold };
-  return cachedFonts;
-}
+// 폰트 로딩(가공본 강제 사유 포함)은 연구모임 제출본 PDF와 공유하는 pdfFonts.ts에 있다.
 
 /** data URL(base64)에서 바이너리 본문만 디코딩한다. */
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -83,7 +66,7 @@ export async function renderCertificateFromTemplate(
   const [{ PDFDocument, rgb }, { default: fontkit }, fonts] = await Promise.all([
     import("pdf-lib"),
     import("@pdf-lib/fontkit"),
-    loadFonts(),
+    loadKoreanFonts(),
   ]);
 
   const pdfDoc = await PDFDocument.create();

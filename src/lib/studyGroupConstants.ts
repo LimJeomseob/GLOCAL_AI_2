@@ -236,7 +236,8 @@ export const STUDY_PLAN_WRITING_RULES = [
 /**
  * 서식은 한글(HWP) 인쇄를 전제한 조판 지침이다. 시스템 입력 단계에서 서체·줄간격을
  * 사용자에게 요구할 수는 없으므로, 분량 기준만 실효 규칙(글자 수)으로 환산한다.
- * 서체·줄간격은 제출본 PDF 출력 시 서버가 적용한다.
+ * 12pt·줄간격 160%는 제출본 PDF(src/lib/studyFormPdf.ts)가 브라우저에서 생성할 때 적용한다.
+ * 서체는 굴림을 배포할 수 없어 저장소의 Noto Sans KR 가공본을 쓴다.
  */
 export const STUDY_PLAN_MIN_CHARS = 1200;
 export const STUDY_REPORT_MIN_CHARS = 3600;
