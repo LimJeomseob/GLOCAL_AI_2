@@ -5,9 +5,11 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { inputBaseClass } from "@/components/ui/FormField";
+import { ExpertApplicationFormModal } from "@/components/admin/ExpertApplicationFormModal";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDateTime } from "@/lib/format";
 import {
+  deleteStudyExpertApplications,
   fetchStudyExpertApplications,
   fetchStudyRounds,
   updateStudyExpertApplication,
@@ -41,12 +43,16 @@ export function ExpertApplicantsTable() {
   const [rows, setRows] = useState<StudyExpertApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [noteDraft, setNoteDraft] = useState("");
   const detailTitleId = useId();
 
@@ -84,6 +90,7 @@ export function ExpertApplicantsTable() {
   }, []);
 
   useEffect(() => {
+    setSelected(new Set());
     if (roundId) void load(roundId);
   }, [roundId, load]);
 
@@ -104,10 +111,70 @@ export function ExpertApplicantsTable() {
 
   const selectedCount = rows.filter((r) => r.status === "selected").length;
   const detail = rows.find((r) => r.id === detailId) ?? null;
+  const editTarget = rows.find((r) => r.id === editId) ?? null;
+
+  /**
+   * 삭제는 화면에 보이는 행만 대상으로 한다 — 필터를 좁힌 뒤 「전체 선택」을 눌렀는데
+   * 필터 밖의 선택이 남아 함께 지워지면 담당자가 삭제 범위를 예측할 수 없다.
+   */
+  const selectedVisible = useMemo(
+    () => filtered.filter((r) => selected.has(r.id)),
+    [filtered, selected]
+  );
+  const allVisibleSelected = filtered.length > 0 && selectedVisible.length === filtered.length;
 
   function openDetail(row: StudyExpertApplication) {
     setDetailId(row.id);
     setNoteDraft(row.note);
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) filtered.forEach((r) => next.delete(r.id));
+      else filtered.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+
+  async function handleDelete() {
+    const targets = selectedVisible;
+    if (targets.length === 0) return;
+    if (
+      !window.confirm(
+        `선택한 ${targets.length}건을 삭제합니다.\n` +
+          `${targets.map((r) => `· ${r.code} ${r.name}`).join("\n")}\n\n` +
+          "되돌릴 수 없습니다. 계속할까요?"
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    const ids = targets.map((r) => r.id);
+    const message = await deleteStudyExpertApplications(ids);
+    setBusy(false);
+
+    if (message) {
+      setError(message);
+      return;
+    }
+    const removed = new Set(ids);
+    setRows((prev) => prev.filter((r) => !removed.has(r.id)));
+    setSelected(new Set());
+    if (detailId && removed.has(detailId)) setDetailId(null);
+    setNotice(`${targets.length}건 삭제했습니다.`);
   }
 
   async function handleStatusChange(id: string, status: StudyExpertStatus) {
@@ -187,11 +254,34 @@ export function ExpertApplicantsTable() {
             </p>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
-          엑셀 내보내기 ({filtered.length})
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+            disabled={loading || !round}
+          >
+            신청자 추가
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
+            엑셀 내보내기 ({filtered.length})
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => void handleDelete()}
+            disabled={busy || loading || selectedVisible.length === 0}
+          >
+            선택 삭제 ({selectedVisible.length})
+          </Button>
+        </div>
       </div>
 
+      {notice && (
+        <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {notice}
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {error}
@@ -246,6 +336,16 @@ export function ExpertApplicantsTable() {
           <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                <th scope="col" className="px-3 py-3 font-semibold">
+                  <input
+                    type="checkbox"
+                    aria-label="목록 전체 선택"
+                    className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                    checked={allVisibleSelected}
+                    disabled={filtered.length === 0}
+                    onChange={toggleAllVisible}
+                  />
+                </th>
                 <th scope="col" className="px-3 py-3 font-semibold">접수번호</th>
                 <th scope="col" className="px-3 py-3 font-semibold">성명</th>
                 <th scope="col" className="px-3 py-3 font-semibold">소속 / 직급</th>
@@ -261,13 +361,22 @@ export function ExpertApplicantsTable() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={11} className="px-3 py-10 text-center text-slate-500">
                     {rows.length === 0 ? "접수된 전문가 신청이 없습니다." : "조건에 맞는 신청이 없습니다."}
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => (
                   <tr key={r.id} className="border-b border-slate-100 align-top last:border-b-0">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`${r.code} ${r.name} 선택`}
+                        className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                        checked={selected.has(r.id)}
+                        onChange={() => toggle(r.id)}
+                      />
+                    </td>
                     <td className="px-3 py-3 font-mono text-xs text-slate-600">{r.code}</td>
                     <td className="px-3 py-3 font-semibold text-slate-800">{r.name}</td>
                     <td className="px-3 py-3">
@@ -388,16 +497,59 @@ export function ExpertApplicantsTable() {
                 닫기
               </Button>
               <Button
-                variant="primary"
+                variant="outline"
                 onClick={handleNoteSave}
                 disabled={busy || noteDraft.trim() === detail.note}
               >
                 메모 저장
               </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditId(detail.id);
+                  setDetailId(null);
+                }}
+                disabled={busy}
+              >
+                수정
+              </Button>
             </div>
           </>
         )}
       </Modal>
+
+      {/* 추가 — 오프라인·유선 접수의 소급 등록 */}
+      {createOpen && round && (
+        <ExpertApplicationFormModal
+          key="new"
+          mode="create"
+          round={round}
+          onClose={() => setCreateOpen(false)}
+          onSaved={(row) => {
+            setCreateOpen(false);
+            setError(null);
+            setRows((prev) => [...prev, row].sort((a, b) => a.code.localeCompare(b.code)));
+            setNotice(`${row.code} ${row.name} 신청을 등록했습니다.`);
+          }}
+        />
+      )}
+
+      {/* 수정 — 신청자가 직접 고칠 수 없는 접수 건의 정정 */}
+      {editTarget && round && (
+        <ExpertApplicationFormModal
+          key={editTarget.id}
+          mode="edit"
+          round={round}
+          initial={editTarget}
+          onClose={() => setEditId(null)}
+          onSaved={(row) => {
+            setEditId(null);
+            setError(null);
+            setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+            setNotice(`${row.code} 신청 내용을 저장했습니다.`);
+          }}
+        />
+      )}
     </div>
   );
 }

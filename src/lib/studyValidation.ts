@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { phoneSchema, emailSchema } from "./validation";
-import { STUDY_CATEGORIES, STUDY_OUTPUT_TYPES } from "./studyTypes";
+import {
+  STUDY_CATEGORIES,
+  STUDY_EXPERT_STATUSES,
+  STUDY_OUTPUT_TYPES,
+  type StudyExpertStatus,
+} from "./studyTypes";
 
 /**
  * AI 활용 연구모임 폼 검증 (트랙 B).
@@ -39,6 +44,30 @@ export const studyApplySchema = z.object({
 });
 
 export type StudyApplyInput = z.infer<typeof studyApplySchema>;
+
+/**
+ * 관리자 화면의 연구모임 신청서 편집. 공개 신청 스키마와 같은 규칙을 쓰되
+ * 동의(consent, 이미 저장된 값)와 회차(roundId, 회차 이동 불가)는 받지 않고,
+ * 계획서 단계에서 정하는 진행방법·교육형태를 함께 고친다.
+ */
+export const studyGroupAdminSchema = studyApplySchema.omit({ consent: true, roundId: true }).extend({
+  progressMethod: z.enum(["전문가코칭", "개별학습"]).nullable(),
+  educationMode: z.enum(["대면", "비대면"]).nullable(),
+});
+
+export type StudyGroupAdminInput = z.infer<typeof studyGroupAdminSchema>;
+
+/** 관리자 화면의 계획서 편집 — Edge Function planSchema와 같은 한도 */
+export const studyPlanAdminSchema = z.object({
+  section1Topic: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
+  section2Purpose: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
+  section3Platform: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
+  section4Effect: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
+  section5Etc: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
+  workshopPref: z.record(z.record(z.string())).default({}),
+});
+
+export type StudyPlanAdminInput = z.infer<typeof studyPlanAdminSchema>;
 
 /**
  * 참여자 명단 검증. 인원 상·하한은 회차 설정(min/max_team_size)에서 오므로
@@ -140,6 +169,23 @@ export const studyExpertApplySchema = z.object({
 });
 
 export type StudyExpertApplyInput = z.infer<typeof studyExpertApplySchema>;
+
+/**
+ * 관리자 화면의 전문가 신청 등록·편집. 공개 신청 규칙을 상속하되 확인·동의 체크는 받지 않고
+ * (신규 등록은 화면에서 오프라인 확인 체크박스로 갈음, DB CHECK 때문에 true로 저장),
+ * 관리자만 다루는 교원 구분·경험·상태·메모를 더한다. 교원 구분과 경험은 공개 폼에서 빠진
+ * 레거시 항목이지만 관리자 표·엑셀이 여전히 표시하므로 관리자는 고칠 수 있게 둔다.
+ */
+export const studyExpertAdminSchema = studyExpertApplySchema
+  .omit({ availabilityConfirmed: true, consent: true })
+  .extend({
+    isNontenured: z.boolean().default(false),
+    experience: z.string().trim().max(4000, "경험은 4,000자 이내로 작성해 주세요.").default(""),
+    status: z.enum(STUDY_EXPERT_STATUSES as [StudyExpertStatus, ...StudyExpertStatus[]]),
+    note: z.string().trim().max(2000, "메모는 2,000자 이내로 작성해 주세요.").default(""),
+  });
+
+export type StudyExpertAdminInput = z.infer<typeof studyExpertAdminSchema>;
 
 /** 본인확인(대표자 성명 + 연락처) — 탭 3~6의 게이트 */
 export const studyIdentitySchema = z.object({
