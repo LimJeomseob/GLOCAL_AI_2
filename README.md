@@ -57,9 +57,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0023`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0024`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0023` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0024` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -68,10 +68,10 @@
    - 발급받은 Client ID/Secret을 Supabase Google Provider 설정에 입력
 4. Authentication → URL Configuration (**로그인 후 localhost로 튕기는 오류를 막으려면 반드시 설정**):
    - **Site URL**: 기본값이 `http://localhost:3000` 이므로 배포 주소로 바꿉니다.
-     예: `https://<github-username>.github.io/GLOCAL_AI`
+     예: `https://<github-username>.github.io/GLOCAL_AI_2`
      (이 값이 localhost로 남아 있으면, 구글 로그인 후 `ERR_CONNECTION_REFUSED`(localhost 연결 거부)로 실패합니다)
    - **Redirect URLs**: 배포될 GitHub Pages 주소를 와일드카드로 추가합니다.
-     예: `https://<github-username>.github.io/GLOCAL_AI/**`
+     예: `https://<github-username>.github.io/GLOCAL_AI_2/**`
      (`**` 는 하위 경로와 `?redirectedFrom=...` 쿼리스트링까지 매칭)
 5. Table Editor에서 `admin_users` 테이블에 관리자로 추가할 이메일이 들어있는지 확인
    (시드에 `eros4424@gmail.com` 포함됨. 추가 관리자는 이 테이블에 행을 더 넣으면 됩니다)
@@ -88,9 +88,21 @@ supabase functions deploy issue-certificate
 supabase functions deploy cancel-application
 supabase functions deploy study-lookup
 supabase functions deploy study-submit
+supabase functions deploy study-notify
 ```
 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 는 Supabase가 모든 Edge Function에
-자동으로 주입하므로 별도 시크릿 설정이 필요 없습니다.
+자동으로 주입합니다. **대표자 안내 메일(`study-notify`)만 발송 서비스 시크릿이 따로 필요합니다**:
+```bash
+supabase secrets set RESEND_API_KEY=re_xxxxxxxx \
+  NOTIFY_FROM_EMAIL="경상국립대학교 AI융합원 <noreply@<인증한 도메인>>" \
+  NOTIFY_REPLY_TO=<문의 회신 주소>   # 선택
+```
+- [Resend](https://resend.com)에서 API 키를 만들고 **발신 도메인을 DNS로 인증**해야 합니다. 인증 전에는
+  `NOTIFY_FROM_EMAIL=onboarding@resend.dev`로 Resend 계정 소유자 주소에만 보낼 수 있습니다(테스트 발송 용도).
+- 시크릿이 없으면 「안내 발송」 탭의 발송 버튼이 설정 안내 오류를 돌려주고 큐 행은 그대로 남습니다.
+- 안내 메일은 자동 발송이 아니라 **자동 준비 + 관리자 승인**입니다. 상태 전이(제출완료·선발/미선발·이수완료)가
+  DB 트리거(`0024`)로 `study_notifications`에 제목·본문까지 렌더링해 쌓아 두고, 관리자가 「안내 발송」 탭에서
+  확인·수정한 뒤 발송합니다. 전문가 신청자에게는 보내지 않습니다.
 
 > `study-submit`을 고쳤다면 **프론트보다 먼저 재배포**하세요. 함수가 옛 버전이면 새 `kind`를 모르기 때문에
 > 화면에서 "입력값을 확인해 주세요."(400)만 돌아옵니다. 이 함수는 `_shared` import가 없는 단일 파일이라
@@ -123,7 +135,7 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
 - `src/app/(study)` — 공개 탭. 라우트가 곧 루트입니다:
   `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup` · `/expert-apply`(교내 AI활용 전문가 신청)
 - `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 · 전문가 신청자 ·
-  참여이력 관리 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
+  참여이력 관리 · 안내 발송 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
   - 공개 수정 경로(`study-submit`)는 신청 마감·심사 착수 전까지만 열리므로, 그 뒤의 정정은 관리자 화면에서
     합니다. **연구모임 관리**의 상세 팝업에서 신청서·참여자·윤리 다짐·계획서를 직접 고치고,
     **전문가 신청자** 탭에서 접수 건을 추가·수정·삭제합니다. 두 경로 모두 Edge Function을 거치지 않고

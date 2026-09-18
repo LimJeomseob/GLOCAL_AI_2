@@ -316,6 +316,86 @@ export interface StudyPriorParticipation {
   created_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// 대표자 안내 메일 큐 (study_notifications, 0015 + 0024)
+// ---------------------------------------------------------------------------
+
+/** 발송 로그의 단계. 0015의 5종 중 자동 큐가 쓰는 것은 접수확인·심사결과·이수확정 셋이다. */
+export type StudyNotificationStage = "접수확인" | "심사결과" | "운영안내" | "제출독려" | "이수확정";
+
+export const STUDY_NOTIFICATION_STAGES: StudyNotificationStage[] = [
+  "접수확인",
+  "심사결과",
+  "운영안내",
+  "제출독려",
+  "이수확정",
+];
+
+export type StudyNotificationStatus = "대기" | "성공" | "실패" | "취소";
+
+export const STUDY_NOTIFICATION_STATUSES: StudyNotificationStatus[] = ["대기", "성공", "실패", "취소"];
+
+export interface StudyNotification {
+  id: string;
+  group_id: string;
+  stage: StudyNotificationStage;
+  channel: string;
+  recipient: string;
+  status: StudyNotificationStatus;
+  sent_at: string | null;
+  error_message: string;
+  subject: string;
+  body: string;
+  /** 큐에 넣은 상태 전이의 새 값(submitted/selected/rejected/completed) */
+  trigger_status: string;
+  approved_by: string;
+  provider_message_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 관리자 화면용 — 큐 행에 모임 식별 정보를 붙인 것 */
+export interface StudyNotificationWithGroup extends StudyNotification {
+  group_code: string;
+  group_name: string;
+  leader_name: string;
+}
+
+/**
+ * 템플릿 stage는 로그 stage와 다르다: 심사결과는 선발/미선발 문구가 달라 행이 둘로 갈린다.
+ * 트리거가 전이 상태로 템플릿 행을 고른다(0024).
+ */
+export type StudyNotificationTemplateStage =
+  | "접수확인"
+  | "심사결과_선발"
+  | "심사결과_미선발"
+  | "이수확정";
+
+export const STUDY_NOTIFICATION_TEMPLATE_STAGES: StudyNotificationTemplateStage[] = [
+  "접수확인",
+  "심사결과_선발",
+  "심사결과_미선발",
+  "이수확정",
+];
+
+export const STUDY_NOTIFICATION_TEMPLATE_LABELS: Record<StudyNotificationTemplateStage, string> = {
+  접수확인: "접수 확인 (제출완료 시)",
+  심사결과_선발: "심사 결과 · 선발",
+  심사결과_미선발: "심사 결과 · 미선발",
+  이수확정: "이수 확정 (이수완료 시)",
+};
+
+/** 템플릿 본문에서 치환되는 변수. 0024 트리거의 jsonb_build_object 키와 같아야 한다. */
+export const STUDY_NOTIFICATION_VARIABLES = ["성명", "접수번호", "모임명", "회차명", "접수일", "조회주소"] as const;
+
+export interface StudyNotificationTemplate {
+  stage: StudyNotificationTemplateStage;
+  subject: string;
+  body: string;
+  enabled: boolean;
+  updated_at: string;
+}
+
 /** 관리자 목록 화면용 조인 결과 */
 export interface StudyGroupWithRelations extends StudyGroup {
   members: StudyGroupMember[];
