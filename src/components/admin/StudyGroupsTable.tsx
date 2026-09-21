@@ -578,7 +578,7 @@ export function StudyGroupsTable() {
             <ul className="mt-2 space-y-1 text-sm text-slate-600" role="list">
               {detail.members.map((m) => (
                 <li key={m.id}>
-                  · {m.name} ({m.affiliation} · {m.position} · {m.id_number})
+                  · {m.name} ({[m.affiliation, m.position, m.id_number, m.phone, m.email].filter(Boolean).join(" · ")})
                   {m.is_leader && <span className="ml-1 text-xs font-semibold text-brand">대표</span>}
                 </li>
               ))}

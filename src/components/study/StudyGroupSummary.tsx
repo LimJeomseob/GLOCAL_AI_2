@@ -315,13 +315,15 @@ export function StudyGroupSummary({
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                 <th scope="col" className="py-2 pr-3 font-semibold">직번</th>
                 <th scope="col" className="py-2 pr-3 font-semibold">성명</th>
                 <th scope="col" className="py-2 pr-3 font-semibold">소속</th>
-                <th scope="col" className="py-2 font-semibold">직급</th>
+                <th scope="col" className="py-2 pr-3 font-semibold">직급</th>
+                <th scope="col" className="py-2 pr-3 font-semibold">연락처</th>
+                <th scope="col" className="py-2 font-semibold">이메일</th>
               </tr>
             </thead>
             <tbody>
@@ -337,7 +339,9 @@ export function StudyGroupSummary({
                     )}
                   </td>
                   <td className="py-2 pr-3">{member.affiliation}</td>
-                  <td className="py-2">{member.position}</td>
+                  <td className="py-2 pr-3">{member.position}</td>
+                  <td className="py-2 pr-3 tabular-nums">{member.phone || "–"}</td>
+                  <td className="py-2 break-all">{member.email || "–"}</td>
                 </tr>
               ))}
             </tbody>

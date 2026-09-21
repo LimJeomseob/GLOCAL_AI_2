@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { phoneSchema, emailSchema } from "./validation";
+import { phoneSchema, emailSchema, optionalPhoneSchema, optionalEmailSchema } from "./validation";
 import {
   STUDY_CATEGORIES,
   STUDY_EXPERT_STATUSES,
@@ -18,10 +18,22 @@ export const studyMemberSchema = z.object({
   name: z.string().trim().min(1, "성명을 입력해 주세요.").max(50),
   affiliation: z.string().trim().min(1, "소속을 입력해 주세요.").max(100),
   position: z.string().trim().min(1, "직급을 입력해 주세요.").max(50),
+  // 참여자별 연락처·이메일(0025). 대표자 행은 신청서 상단의 대표자 연락처·이메일을 그대로 쓴다.
+  phone: phoneSchema,
+  email: emailSchema,
   isLeader: z.boolean().default(false),
 });
 
 export type StudyMemberInput = z.infer<typeof studyMemberSchema>;
+
+/**
+ * 관리자 화면의 참여자 행 규칙. 연락처·이메일 도입(0025) 전 접수분은 빈 값이므로
+ * 관리자는 빈 값을 둔 채 다른 항목을 고칠 수 있어야 한다 — 값이 있을 때만 형식을 검사한다.
+ */
+export const studyMemberAdminSchema = studyMemberSchema.extend({
+  phone: optionalPhoneSchema,
+  email: optionalEmailSchema,
+});
 
 /** [서식 1] 신청서 — 탭 2 */
 export const studyApplySchema = z.object({
@@ -73,11 +85,13 @@ export type StudyPlanAdminInput = z.infer<typeof studyPlanAdminSchema>;
  * 참여자 명단 검증. 인원 상·하한은 회차 설정(min/max_team_size)에서 오므로
  * 스키마에 고정하지 않고 이 함수로 검사한다.
  * 최종 강제는 DB 트리거(check_study_group_submit)가 한다 — 화면 검사는 안내용.
+ * rowSchema는 행 단위 규칙 — 공개 신청은 기본값(연락처·이메일 필수), 관리자는 studyMemberAdminSchema.
  */
 export function validateMembers(
   members: StudyMemberInput[],
   min: number,
-  max: number
+  max: number,
+  rowSchema: z.ZodTypeAny = studyMemberSchema
 ): string | null {
   if (members.length < min) {
     return `참여자를 ${min}명 이상 등록해 주세요. (현재 ${members.length}명)`;
@@ -92,7 +106,7 @@ export function validateMembers(
   }
 
   for (const [index, member] of members.entries()) {
-    const parsed = studyMemberSchema.safeParse(member);
+    const parsed = rowSchema.safeParse(member);
     if (!parsed.success) {
       return `참여자 ${index + 1}행: ${parsed.error.issues[0].message}`;
     }

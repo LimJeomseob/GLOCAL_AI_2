@@ -3,6 +3,7 @@
 import { createSupabaseBrowserClient } from "./supabase/client";
 import { TABLES } from "./db-tables";
 import { extractFunctionError } from "./functionError";
+import { formatPhone } from "./format";
 import { countChars } from "./studyValidation";
 import type { StudyMemberInput, StudyPlanAdminInput } from "./studyValidation";
 import type {
@@ -303,6 +304,9 @@ export async function replaceStudyGroupMembers(
     name: member.name.trim(),
     affiliation: member.affiliation.trim(),
     position: member.position.trim(),
+    // 공개 경로(phoneSchema)와 같은 010-####-#### 저장 형식. 빈 값(도입 전 접수분)은 그대로 둔다.
+    phone: member.phone.trim() === "" ? "" : formatPhone(member.phone.trim()),
+    email: member.email.trim(),
     is_leader: member.isLeader,
     sort_order: index,
   }));

@@ -58,6 +58,9 @@ const memberSchema = z.object({
   name: z.string().trim().min(1).max(50),
   affiliation: z.string().trim().min(1).max(100),
   position: z.string().trim().min(1).max(50),
+  // 참여자별 연락처·이메일(0025) — 화면(studyMemberSchema)과 같은 규칙
+  phone: phoneField,
+  email: z.string().trim().email(),
   isLeader: z.boolean().default(false),
 });
 
@@ -243,6 +246,8 @@ function toMemberRows(groupId: string, members: MemberInput[]) {
     name: m.name,
     affiliation: m.affiliation,
     position: m.position,
+    phone: m.phone,
+    email: m.email,
     is_leader: m.isLeader,
     sort_order: index,
   }));

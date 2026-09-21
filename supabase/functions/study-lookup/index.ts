@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
   const [membersRes, plansRes, meetingsRes, reportsRes, outputsRes] = await Promise.all([
     supabase
       .from("study_group_members")
-      .select("id, group_id, id_number, name, affiliation, position, is_leader, sort_order")
+      .select("id, group_id, id_number, name, affiliation, position, phone, email, is_leader, sort_order")
       .in("group_id", ids)
       .order("sort_order"),
     supabase
@@ -158,6 +158,9 @@ Deno.serve(async (req: Request) => {
         name: m.name,
         affiliation: m.affiliation,
         position: m.position,
+        // 참여자 연락처는 본인확인 키가 아니라 신청서 수정 초기값·명단 표시에 그대로 내려준다.
+        phone: m.phone ?? "",
+        email: m.email ?? "",
         isLeader: m.is_leader,
         sortOrder: m.sort_order,
       })),

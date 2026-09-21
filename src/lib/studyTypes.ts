@@ -196,6 +196,9 @@ export interface StudyGroupMember {
   name: string;
   affiliation: string;
   position: string;
+  /** 참여자 연락처·이메일(0025). 도입 전 접수분은 빈 문자열 */
+  phone: string;
+  email: string;
   is_leader: boolean;
   sort_order: number;
 }
@@ -416,6 +419,9 @@ export interface StudyLookupMember {
   name: string;
   affiliation: string;
   position: string;
+  /** 참여자 연락처·이메일(0025). 도입 전 접수분은 빈 문자열 */
+  phone: string;
+  email: string;
   isLeader: boolean;
   sortOrder: number;
 }
