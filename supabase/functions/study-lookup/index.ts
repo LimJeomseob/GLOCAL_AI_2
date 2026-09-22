@@ -51,6 +51,7 @@ Deno.serve(async (req: Request) => {
        leader_name, leader_affiliation, leader_position, leader_id_number, leader_phone, leader_email,
        period_start, period_end, member_count, is_multi_dept, has_nontenured,
        progress_method, education_mode, total_score, rank, submitted_at, created_at,
+       expert:study_expert_applications(name, affiliation, position, phone, email),
        round:study_rounds(
          id, year, semester, title, research_topic,
          apply_open_at, apply_close_at, review_close_at,
@@ -77,7 +78,15 @@ Deno.serve(async (req: Request) => {
 
   const ids = matched.map((row: { id: string }) => row.id);
 
-  const [membersRes, plansRes, meetingsRes, reportsRes, outputsRes] = await Promise.all([
+  const [
+    membersRes,
+    plansRes,
+    meetingsRes,
+    reportsRes,
+    outputsRes,
+    coachingSessionsRes,
+    coachingMemosRes,
+  ] = await Promise.all([
     supabase
       .from("study_group_members")
       .select("id, group_id, id_number, name, affiliation, position, phone, email, is_leader, sort_order")
@@ -101,6 +110,17 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .in("group_id", ids)
       .order("sort_order"),
+    supabase
+      .from("study_coaching_sessions")
+      .select("*")
+      .in("group_id", ids)
+      .order("session_no")
+      .order("created_at"),
+    supabase
+      .from("study_coaching_memos")
+      .select("*")
+      .in("group_id", ids)
+      .order("created_at"),
   ]);
 
   const byGroup = <T extends { group_id: string }>(rows: T[] | null) => {
@@ -118,9 +138,12 @@ Deno.serve(async (req: Request) => {
   const meetings = byGroup(meetingsRes.data);
   const reports = byGroup(reportsRes.data);
   const outputs = byGroup(outputsRes.data);
+  const coachingSessions = byGroup(coachingSessionsRes.data);
+  const coachingMemos = byGroup(coachingMemosRes.data);
 
   const results = matched.map((g: any) => {
     const round = one<any>(g.round);
+    const expert = one<any>(g.expert);
     const plan = plans.get(g.id)?.[0] ?? null;
     const report = reports.get(g.id)?.[0] ?? null;
 
@@ -163,6 +186,37 @@ Deno.serve(async (req: Request) => {
         email: m.email ?? "",
         isLeader: m.is_leader,
         sortOrder: m.sort_order,
+      })),
+      // 배정 전문가 — 팀이 직접 연락해 일정을 잡아야 하므로 연락처·이메일을 함께 준다.
+      expert: expert
+        ? {
+            name: expert.name,
+            affiliation: expert.affiliation,
+            position: expert.position,
+            phone: expert.phone,
+            email: expert.email,
+          }
+        : null,
+      coachingSessions: (coachingSessions.get(g.id) ?? []).map((s: any) => ({
+        id: s.id,
+        sessionNo: s.session_no,
+        metAt: s.met_at,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        location: s.location,
+        status: s.status,
+        proposedBy: s.proposed_by,
+        expertNote: s.expert_note,
+        confirmedBy: s.confirmed_by,
+        confirmedAt: s.confirmed_at,
+        createdAt: s.created_at,
+      })),
+      coachingMemos: (coachingMemos.get(g.id) ?? []).map((m: any) => ({
+        id: m.id,
+        authorRole: m.author_role,
+        authorName: m.author_name,
+        body: m.body,
+        createdAt: m.created_at,
       })),
       plan: plan
         ? {

@@ -378,6 +378,22 @@ export const STUDY_CONSENT_ITEMS = [
 /** 회의록 진척 기준 — 다과비 산출근거(10,000원 × 5명 × 30회 / 10개팀)에서 역산한 팀당 목표 횟수 */
 export const STUDY_MEETING_TARGET_COUNT = 3;
 
+/**
+ * 코칭 3회 — 공문의 활동내용 3단계(기획·제작·환류)와 같은 구분이다.
+ * 아래 STUDY_EXPERT_ACTIVITIES와 단계명이 같아야 하며, DB의 session_no 1~3에 대응한다.
+ */
+export const STUDY_COACHING_SESSIONS = [
+  { no: 1, label: "1차 기획", detail: "연구과제 해결을 위한 기획 및 AI도구 사용법 안내" },
+  { no: 2, label: "2차 제작", detail: "강의도구 및 콘텐츠 MVP 제작" },
+  { no: 3, label: "3차 환류", detail: "제작 시 발생한 오류 해결 및 배포" },
+] as const;
+
+export const STUDY_COACHING_TARGET_COUNT = STUDY_COACHING_SESSIONS.length;
+
+export function studyCoachingSessionLabel(sessionNo: number): string {
+  return STUDY_COACHING_SESSIONS.find((s) => s.no === sessionNo)?.label ?? `${sessionNo}차`;
+}
+
 // ----------------------------------------------------------------------------
 // 교내 AI활용 전문가 모집 — 탭 7
 // 근거문서: [글로컬대학사업] 2026학년도 AI활용 연구모임 교내 AI활용 전문가 모집 안내 (AI융합원)

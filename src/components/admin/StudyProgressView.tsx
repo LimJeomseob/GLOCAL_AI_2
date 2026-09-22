@@ -8,7 +8,7 @@ import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
 import { fetchStudyGroups, fetchStudyRounds } from "@/lib/studyAdmin";
-import { STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
+import { STUDY_COACHING_TARGET_COUNT, STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
 import { STUDY_OUTPUT_TYPES, type StudyGroupWithRelations, type StudyRound } from "@/lib/studyTypes";
 
 const ALL = "__all__";
@@ -141,7 +141,7 @@ export function StudyProgressView() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 운영현황</h1>
           <p className="mt-1 text-sm text-slate-600">
-            선발된 팀의 회의록·산출물·결과보고서 제출 진척을 확인합니다.
+            선발된 팀의 전문가 배정·코칭 일정·회의록·산출물·결과보고서 진척을 확인합니다.
             {round && ` 결과보고 마감 ${formatDate(round.report_due_at)}`}
           </p>
         </div>
@@ -173,12 +173,14 @@ export function StudyProgressView() {
           <section className="flex flex-col gap-3">
             <h2 className="text-base font-bold text-slate-800">팀별 진척</h2>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[1020px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                     <th scope="col" className="px-3 py-3 font-semibold">접수번호</th>
                     <th scope="col" className="px-3 py-3 font-semibold">모임명</th>
                     <th scope="col" className="px-3 py-3 font-semibold">대표자</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">배정 전문가</th>
+                    <th scope="col" className="px-3 py-3 text-right font-semibold">코칭</th>
                     <th scope="col" className="px-3 py-3 text-right font-semibold">회의록</th>
                     <th scope="col" className="px-3 py-3 text-right font-semibold">산출물</th>
                     <th scope="col" className="px-3 py-3 font-semibold">결과보고서</th>
@@ -189,11 +191,32 @@ export function StudyProgressView() {
                   {groups.map((g) => {
                     const meetingShort = g.meetings.length < STUDY_MEETING_TARGET_COUNT;
                     const reportDone = Boolean(g.report?.submitted_at);
+                    const coachingDone = g.coachingSessions.filter((s) => s.status === "확정").length;
                     return (
                       <tr key={g.id} className="border-b border-slate-100 last:border-b-0">
                         <td className="px-3 py-3 font-mono text-xs text-slate-600">{g.code}</td>
                         <td className="px-3 py-3 font-semibold text-slate-800">{g.name}</td>
                         <td className="px-3 py-3 text-slate-700">{g.leader_name}</td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {g.expert ? (
+                            g.expert.name
+                          ) : (
+                            <span className="text-amber-700">미배정</span>
+                          )}
+                        </td>
+                        <td
+                          className={clsx(
+                            "px-3 py-3 text-right font-semibold tabular-nums",
+                            coachingDone < STUDY_COACHING_TARGET_COUNT
+                              ? "text-amber-700"
+                              : "text-emerald-700"
+                          )}
+                        >
+                          {coachingDone}
+                          <span className="ml-0.5 text-xs font-normal text-slate-400">
+                            /{STUDY_COACHING_TARGET_COUNT}
+                          </span>
+                        </td>
                         <td
                           className={clsx(
                             "px-3 py-3 text-right tabular-nums font-semibold",
