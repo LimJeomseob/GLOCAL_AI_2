@@ -286,3 +286,20 @@ export const STUDY_APPLY_EDITABLE_STATUSES: StudyGroupStatus[] = ["draft", "subm
 export function canEditStudyApplication(status: StudyGroupStatus): boolean {
   return STUDY_APPLY_EDITABLE_STATUSES.includes(status);
 }
+
+/**
+ * 계획서 본문이 잠긴 뒤에도 대표자가 「단계별 워크숍 희망일·시작 시간」만은 고칠 수 있는 상태.
+ * 강사 배정 일정은 운영 중에도 조정되므로 본문과 달리 제출 후에도 열어 둔다.
+ * 서버(study-submit의 WORKSHOP_PREF_EDITABLE_STATUSES)와 같은 기준이며, 실제 강제는 서버가 한다.
+ * draft는 계획서 저장 경로(kind: "plan")로 본문과 함께 저장하므로 제외한다.
+ */
+export const STUDY_WORKSHOP_PREF_EDITABLE_STATUSES: StudyGroupStatus[] = [
+  "submitted",
+  "under_review",
+  "selected",
+  "in_progress",
+];
+
+export function canEditWorkshopPref(status: StudyGroupStatus): boolean {
+  return STUDY_WORKSHOP_PREF_EDITABLE_STATUSES.includes(status);
+}

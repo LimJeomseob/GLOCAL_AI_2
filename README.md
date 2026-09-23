@@ -31,8 +31,10 @@
   - `supabase/functions/study-lookup` — 대표자 성명+연락처가 일치하는 연구모임과 그 팀의 계획서·회의록·
     결과보고서·산출물을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
   - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/
-    expert-apply/plan/meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `apply-edit`은 '내 연구모임'
-    탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `expert-apply`는 연구모임을 코칭할
+    expert-apply/plan/workshop-pref/meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `apply-edit`은 '내 연구모임'
+    탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `workshop-pref`는 계획서 본문이
+    잠긴 뒤에도 대표자가 「단계별 워크숍 희망일·시작 시간」만 고치는 경로(제출완료~운영중에만 열린다 — 강사 배정 일정은
+    운영 중에도 조정된다). `expert-apply`는 연구모임을 코칭할
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
     이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
     Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가

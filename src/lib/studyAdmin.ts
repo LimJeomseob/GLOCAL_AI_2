@@ -26,6 +26,7 @@ import type {
   StudyRound,
   WorkshopPreference,
 } from "./studyTypes";
+import { getWorkshopSlot, isWorkshopTimeKey } from "./workshopPref";
 
 /**
  * Postgres 오류를 담당자가 읽을 수 있는 문구로 바꾼다.
@@ -379,6 +380,8 @@ export async function deleteStudyGroups(ids: string[]): Promise<string | null> {
 export interface WorkshopDemandCell {
   stepKey: string;
   date: string;
+  /** 시작 시간(HH:MM). 시간 입력 도입 전 접수분은 "" */
+  time: string;
   groups: string[];
 }
 
@@ -391,12 +394,16 @@ export function aggregateWorkshopDemand(
     const pref = group.plan?.workshop_pref;
     if (!pref) continue;
 
-    for (const option of Object.values(pref)) {
-      for (const [stepKey, date] of Object.entries(option ?? {})) {
+    for (const [optionKey, option] of Object.entries(pref)) {
+      for (const stepKey of Object.keys(option ?? {})) {
+        // 시간 키(`${stepKey}Time`)는 날짜 칸을 돌 때 함께 읽으므로 따로 세지 않는다.
+        if (isWorkshopTimeKey(stepKey)) continue;
+        const { date, time } = getWorkshopSlot(pref, optionKey, stepKey);
         if (!date) continue;
-        const key = `${stepKey}|${date}`;
-        const cell = map.get(key) ?? { stepKey, date, groups: [] };
-        // 같은 팀이 1안·2안에 같은 날짜를 적었어도 한 번만 센다.
+        // 같은 날이라도 시간대가 다르면 강사 배정 단위가 달라지므로 따로 센다.
+        const key = `${stepKey}|${date}|${time}`;
+        const cell = map.get(key) ?? { stepKey, date, time, groups: [] };
+        // 같은 팀이 1안·2안에 같은 날짜·시간을 적었어도 한 번만 센다.
         if (!cell.groups.includes(group.code)) cell.groups.push(group.code);
         map.set(key, cell);
       }
@@ -404,7 +411,10 @@ export function aggregateWorkshopDemand(
   }
 
   return Array.from(map.values()).sort(
-    (a, b) => a.stepKey.localeCompare(b.stepKey) || a.date.localeCompare(b.date)
+    (a, b) =>
+      a.stepKey.localeCompare(b.stepKey) ||
+      a.date.localeCompare(b.date) ||
+      a.time.localeCompare(b.time)
   );
 }
 

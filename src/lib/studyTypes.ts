@@ -233,8 +233,11 @@ export interface StudyGroup {
 }
 
 /**
- * 계획서 5번의 구조화 부분.
- * { option1: { step1: "2026-09-29", step2: "...", step3: "..." }, option2: {...} }
+ * 계획서 5번의 구조화 부분 — 단계별 희망일과 시작 시간.
+ * { option1: { step1: "2026-09-29", step1Time: "14:00", step2: "...", step2Time: "..." }, option2: {...} }
+ *
+ * 시간 키는 `${stepKey}Time`으로 파생된다(src/lib/workshopPref.ts가 유일한 생성·해석 지점).
+ * 시간 도입 전에 저장된 행에는 시간 키가 없고, 그 경우 "시간 미입력"으로 다룬다.
  */
 export type WorkshopPreference = Record<string, Record<string, string>>;
 
