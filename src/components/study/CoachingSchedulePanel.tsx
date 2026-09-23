@@ -351,7 +351,7 @@ export function CoachingSchedulePanel({
 
                       {editable && (
                         <div className="flex flex-wrap gap-1">
-                          {actor === "전문가" && onRespond && s.status !== "확정" && (
+                          {actor === "전문가" && onRespond && s.status !== "확정" && s.proposedBy !== "전문가" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -364,7 +364,7 @@ export function CoachingSchedulePanel({
                               가능 여부 회신
                             </Button>
                           )}
-                          {s.status !== "확정" && s.status !== "불가" && (
+                          {(s.status === "가능" || (s.status === "제안" && s.proposedBy !== actor)) && (
                             <Button
                               variant="ghost"
                               size="sm"

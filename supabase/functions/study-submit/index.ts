@@ -201,11 +201,23 @@ const expertApplySchema = z.object({
 
 const coachingProposalFields = {
   sessionNo: z.number().int().min(1).max(3),
-  metAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  metAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((v) => {
+      const d = new Date(`${v}T00:00:00Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+    }),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   location: z.string().trim().min(1).max(200),
 };
+
+/** 종료 시각이 시작 시각보다 늦어야 한다. HH:MM 형식이라 문자열 비교로 충분하다. */
+const COACHING_TIME_ERROR = "종료 시각은 시작 시각보다 늦어야 합니다.";
+function isValidTimeRange(startTime: string, endTime: string): boolean {
+  return startTime < endTime;
+}
 
 /** 전문가 본인확인 — 대표자 신원과 키 이름을 달리해 verifyLeader와 섞이지 않게 한다. */
 const expertIdentity = {
@@ -373,7 +385,7 @@ async function enqueueCoachingNotice(
   vars: Record<string, string>
 ) {
   try {
-    await supabase.rpc("enqueue_study_coaching_notification", {
+    const { error } = await supabase.rpc("enqueue_study_coaching_notification", {
       p_group_id: group.id,
       p_template_stage: templateStage,
       p_recipient: recipient,
@@ -384,6 +396,8 @@ async function enqueueCoachingNotice(
         ...vars,
       },
     });
+    // rpc()는 실패해도 throw하지 않고 error를 돌려준다.
+    if (error) console.warn("[study-submit] 코칭 안내 적재 실패:", error);
   } catch (e) {
     console.warn("[study-submit] 코칭 안내 적재 실패:", e);
   }
@@ -400,11 +414,12 @@ async function confirmCoachingSession(
   supabase: Client,
   groupId: string,
   sessionId: string,
+  actor: "팀" | "전문가",
   confirmedBy: string
 ): Promise<Response | null> {
   const { data: target, error: targetError } = await supabase
     .from("study_coaching_sessions")
-    .select("id, session_no, status")
+    .select("id, session_no, status, proposed_by")
     .eq("id", sessionId)
     .eq("group_id", groupId)
     .maybeSingle();
@@ -413,6 +428,16 @@ async function confirmCoachingSession(
   if (!target) return jsonResponse({ error: "코칭 일정을 찾을 수 없습니다." }, 404);
   if ((target as any).status === "불가") {
     return jsonResponse({ error: "전문가가 불가로 회신한 일정은 확정할 수 없습니다." }, 400);
+  }
+  // 한쪽이 혼자 확정하지 못하게 한다 — 전문가가 '가능'으로 회신했거나,
+  // 상대방이 올린 제안을 이쪽이 받아들이는 경우에만 확정할 수 있다.
+  const status = (target as any).status as string;
+  const proposedBy = (target as any).proposed_by as string;
+  if (!(status === "가능" || (status === "제안" && proposedBy !== actor))) {
+    return jsonResponse(
+      { error: "상대방이 가능 여부를 회신하거나 제안을 받아들인 뒤에 확정할 수 있습니다." },
+      400
+    );
   }
 
   // 같은 회차의 기존 확정 해제 — 부분 유니크 인덱스 충돌을 피한다.
@@ -429,12 +454,18 @@ async function confirmCoachingSession(
     return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
   }
 
-  const { error: confirmError } = await supabase
+  const { data: confirmed, error: confirmError } = await supabase
     .from("study_coaching_sessions")
     .update({ status: "확정", confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
     .eq("id", sessionId)
-    .eq("group_id", groupId);
+    .eq("group_id", groupId)
+    .in("status", ["제안", "가능"])
+    .select("id");
 
+  if (!confirmError && (!confirmed || confirmed.length === 0)) {
+    // 읽은 뒤 그 사이에 '불가' 회신 등으로 상태가 바뀌었다.
+    return jsonResponse({ error: "일정 상태가 바뀌었습니다. 새로고침 후 다시 시도해 주세요." }, 409);
+  }
   if (confirmError) {
     console.error("[study-submit] 코칭 일정 확정 실패:", confirmError);
     return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
@@ -772,6 +803,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.kind === "expert-coaching-propose") {
+      if (!isValidTimeRange(body.startTime, body.endTime)) {
+        return jsonResponse({ error: COACHING_TIME_ERROR }, 400);
+      }
       const { data: created, error } = await supabase
         .from("study_coaching_sessions")
         .insert({
@@ -850,6 +884,7 @@ Deno.serve(async (req: Request) => {
       supabase,
       body.groupId,
       body.sessionId,
+      "전문가",
       `전문가 ${expert.name}`
     );
     if (confirmError) return confirmError;
@@ -1096,6 +1131,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.kind === "coaching-propose") {
+      if (!isValidTimeRange(body.startTime, body.endTime)) {
+        return jsonResponse({ error: COACHING_TIME_ERROR }, 400);
+      }
       const { data: created, error } = await supabase
         .from("study_coaching_sessions")
         .insert({
@@ -1166,6 +1204,7 @@ Deno.serve(async (req: Request) => {
       supabase,
       body.groupId,
       body.sessionId,
+      "팀",
       `대표자 ${body.leaderName}`
     );
     if (confirmError) return confirmError;

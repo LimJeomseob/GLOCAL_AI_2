@@ -140,7 +140,15 @@ export async function lookupStudyGroups(
     if (!data || !Array.isArray(data.results)) {
       return { data: null, error: "응답을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요." };
     }
-    return { data: data.results as StudyLookupResult[], error: null };
+    // 함수가 이 화면보다 옛 버전이어도(배포 순서가 어긋나도) 화면이 깨지지 않도록 새 필드를 채운다.
+    const results = (data.results as StudyLookupResult[]).map((r) => ({
+      ...r,
+      members: (r.members ?? []).map((m) => ({ ...m, phone: m.phone ?? "", email: m.email ?? "" })),
+      expert: r.expert ?? null,
+      coachingSessions: r.coachingSessions ?? [],
+      coachingMemos: r.coachingMemos ?? [],
+    }));
+    return { data: results, error: null };
   } catch {
     return { data: null, error: "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." };
   }

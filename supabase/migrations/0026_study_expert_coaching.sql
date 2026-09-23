@@ -208,3 +208,18 @@ $$;
 
 comment on function public.enqueue_study_coaching_notification(uuid, text, text, jsonb) is
   '코칭 일정 제안·응답·확정 1건을 안내 메일 큐에 넣는다. 같은 회차에 여러 건이 쌓이므로 중복 방지를 걸지 않는다.';
+
+-- ----------------------------------------------------------------------------
+-- 6. 적재 함수 실행 권한 — service role(Edge Function)과 트리거만 쓴다.
+--
+-- Supabase는 public 스키마 함수에 anon·authenticated 실행 권한을 기본으로 준다.
+-- security definer인 적재 함수를 익명이 RPC로 직접 부르면 수신자·본문 변수를 임의로 채운
+-- 행을 안내 큐에 넣을 수 있으므로 회수한다. 0024의 상태 전이 적재 함수도 함께 막는다
+-- (트리거 안에서는 소유자 권한으로 실행되므로 영향이 없다).
+-- ----------------------------------------------------------------------------
+revoke execute on function public.enqueue_study_coaching_notification(uuid, text, text, jsonb)
+  from public, anon, authenticated;
+revoke execute on function public.enqueue_study_notification(uuid, text, text, text, text, jsonb)
+  from public, anon, authenticated;
+grant execute on function public.enqueue_study_coaching_notification(uuid, text, text, jsonb)
+  to service_role;
