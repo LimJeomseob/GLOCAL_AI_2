@@ -58,6 +58,9 @@ const memberSchema = z.object({
   name: z.string().trim().min(1).max(50),
   affiliation: z.string().trim().min(1).max(100),
   position: z.string().trim().min(1).max(50),
+  // 참여자별 연락처·이메일(0025) — 화면(studyMemberSchema)과 같은 규칙
+  phone: phoneField,
+  email: z.string().trim().email(),
   isLeader: z.boolean().default(false),
 });
 
@@ -188,6 +191,98 @@ const expertApplySchema = z.object({
   consent: z.literal(true),
 });
 
+// ---------------------------------------------------------------------------
+// 코칭 일정 조율 (0026)
+//
+// 팀(대표자 본인확인)과 전문가(성명+연락처 본인확인)가 같은 스레드에 쓰므로 두 벌의 kind를 둔다.
+// 팀 요청은 아래 공통 verifyLeader 경로를 타고, 전문가 요청은 groupId가 있어도 대표자 신원이
+// 없으므로 그 앞에서 따로 처리한다.
+// ---------------------------------------------------------------------------
+
+const coachingProposalFields = {
+  sessionNo: z.number().int().min(1).max(3),
+  metAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((v) => {
+      const d = new Date(`${v}T00:00:00Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+    }),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  location: z.string().trim().min(1).max(200),
+};
+
+/** 종료 시각이 시작 시각보다 늦어야 한다. HH:MM 형식이라 문자열 비교로 충분하다. */
+const COACHING_TIME_ERROR = "종료 시각은 시작 시각보다 늦어야 합니다.";
+function isValidTimeRange(startTime: string, endTime: string): boolean {
+  return startTime < endTime;
+}
+
+/** 전문가 본인확인 — 대표자 신원과 키 이름을 달리해 verifyLeader와 섞이지 않게 한다. */
+const expertIdentity = {
+  expertName: z.string().trim().min(1),
+  expertPhone: phoneField,
+};
+
+const coachingProposeSchema = z.object({
+  kind: z.literal("coaching-propose"),
+  groupId: z.string().uuid(),
+  ...identity,
+  ...coachingProposalFields,
+});
+
+const coachingConfirmSchema = z.object({
+  kind: z.literal("coaching-confirm"),
+  groupId: z.string().uuid(),
+  ...identity,
+  sessionId: z.string().uuid(),
+});
+
+const coachingDeleteSchema = z.object({
+  kind: z.literal("coaching-delete"),
+  groupId: z.string().uuid(),
+  ...identity,
+  sessionId: z.string().uuid(),
+});
+
+const coachingMemoSchema = z.object({
+  kind: z.literal("coaching-memo"),
+  groupId: z.string().uuid(),
+  ...identity,
+  body: z.string().trim().min(1).max(2000),
+});
+
+const expertCoachingProposeSchema = z.object({
+  kind: z.literal("expert-coaching-propose"),
+  groupId: z.string().uuid(),
+  ...expertIdentity,
+  ...coachingProposalFields,
+});
+
+const expertCoachingRespondSchema = z.object({
+  kind: z.literal("expert-coaching-respond"),
+  groupId: z.string().uuid(),
+  ...expertIdentity,
+  sessionId: z.string().uuid(),
+  response: z.enum(["가능", "불가"]),
+  note: z.string().trim().max(500).default(""),
+});
+
+const expertCoachingConfirmSchema = z.object({
+  kind: z.literal("expert-coaching-confirm"),
+  groupId: z.string().uuid(),
+  ...expertIdentity,
+  sessionId: z.string().uuid(),
+});
+
+const expertCoachingMemoSchema = z.object({
+  kind: z.literal("expert-coaching-memo"),
+  groupId: z.string().uuid(),
+  ...expertIdentity,
+  body: z.string().trim().min(1).max(2000),
+});
+
 const bodySchema = z.discriminatedUnion("kind", [
   applySchema,
   applyEditSchema,
@@ -196,6 +291,14 @@ const bodySchema = z.discriminatedUnion("kind", [
   meetingSaveSchema,
   meetingDeleteSchema,
   reportSchema,
+  coachingProposeSchema,
+  coachingConfirmSchema,
+  coachingDeleteSchema,
+  coachingMemoSchema,
+  expertCoachingProposeSchema,
+  expertCoachingRespondSchema,
+  expertCoachingConfirmSchema,
+  expertCoachingMemoSchema,
 ]);
 
 function normalizePhone(phone: string): string {
@@ -243,16 +346,190 @@ function toMemberRows(groupId: string, members: MemberInput[]) {
     name: m.name,
     affiliation: m.affiliation,
     position: m.position,
+    phone: m.phone,
+    email: m.email,
     is_leader: m.isLeader,
     sort_order: index,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// 코칭 일정 공통
+// ---------------------------------------------------------------------------
+
+/** 코칭 일정을 주고받을 수 있는 상태 — 운영 산출물과 같은 기준(선발된 팀의 운영 기간) */
+const COACHING_STATUSES = ["selected", "in_progress"];
+
+const COACHING_SESSION_LABELS: Record<number, string> = {
+  1: "1차 기획",
+  2: "2차 제작",
+  3: "3차 환류",
+};
+
+const LOOKUP_URL = "https://limjeomseob.github.io/GLOCAL_AI_2/lookup/";
+
+function coachingWhen(metAt: string, startTime: string | null, endTime: string | null): string {
+  const time = startTime ? ` ${startTime.slice(0, 5)}${endTime ? `~${endTime.slice(0, 5)}` : ""}` : "";
+  return `${metAt}${time}`;
+}
+
+/**
+ * 코칭 안내를 큐에 넣는다. 실패해도 일정 저장을 되돌리지 않는다 —
+ * 메일은 보조 수단이고 화면 조회가 정본이기 때문(0024와 같은 방침).
+ */
+async function enqueueCoachingNotice(
+  supabase: Client,
+  group: Record<string, any>,
+  templateStage: string,
+  recipient: string,
+  vars: Record<string, string>
+) {
+  try {
+    const { error } = await supabase.rpc("enqueue_study_coaching_notification", {
+      p_group_id: group.id,
+      p_template_stage: templateStage,
+      p_recipient: recipient,
+      p_vars: {
+        접수번호: group.code ?? "",
+        모임명: group.name ?? "",
+        조회주소: LOOKUP_URL,
+        ...vars,
+      },
+    });
+    // rpc()는 실패해도 throw하지 않고 error를 돌려준다.
+    if (error) console.warn("[study-submit] 코칭 안내 적재 실패:", error);
+  } catch (e) {
+    console.warn("[study-submit] 코칭 안내 적재 실패:", e);
+  }
+}
+
+const EXPERT_IDENTITY_ERROR = "배정된 연구모임을 찾을 수 없습니다. 성명과 연락처를 확인해 주세요.";
+
+/**
+ * 제안 1건을 확정한다. 회차당 확정은 1건뿐이므로(부분 유니크 인덱스) 같은 회차의 기존 확정을
+ * 먼저 '가능'으로 되돌린 뒤 새 행을 확정한다 — 일정을 다시 잡는 경우가 정상적으로 생긴다.
+ * 통과하면 null, 아니면 그대로 돌려줄 응답.
+ */
+async function confirmCoachingSession(
+  supabase: Client,
+  groupId: string,
+  sessionId: string,
+  actor: "팀" | "전문가",
+  confirmedBy: string
+): Promise<Response | null> {
+  const { data: target, error: targetError } = await supabase
+    .from("study_coaching_sessions")
+    .select("id, session_no, status, proposed_by")
+    .eq("id", sessionId)
+    .eq("group_id", groupId)
+    .maybeSingle();
+
+  if (targetError) return jsonResponse({ error: "조회 중 오류가 발생했습니다." }, 500);
+  if (!target) return jsonResponse({ error: "코칭 일정을 찾을 수 없습니다." }, 404);
+  if ((target as any).status === "불가") {
+    return jsonResponse({ error: "전문가가 불가로 회신한 일정은 확정할 수 없습니다." }, 400);
+  }
+  // 한쪽이 혼자 확정하지 못하게 한다 — 전문가가 '가능'으로 회신했거나,
+  // 상대방이 올린 제안을 이쪽이 받아들이는 경우에만 확정할 수 있다.
+  const status = (target as any).status as string;
+  const proposedBy = (target as any).proposed_by as string;
+  if (!(status === "가능" || (status === "제안" && proposedBy !== actor))) {
+    return jsonResponse(
+      { error: "상대방이 가능 여부를 회신하거나 제안을 받아들인 뒤에 확정할 수 있습니다." },
+      400
+    );
+  }
+
+  // 같은 회차의 기존 확정 해제 — 부분 유니크 인덱스 충돌을 피한다.
+  const { error: releaseError } = await supabase
+    .from("study_coaching_sessions")
+    .update({ status: "가능", confirmed_by: "", confirmed_at: null })
+    .eq("group_id", groupId)
+    .eq("session_no", (target as any).session_no)
+    .eq("status", "확정")
+    .neq("id", sessionId);
+
+  if (releaseError) {
+    console.error("[study-submit] 기존 확정 해제 실패:", releaseError);
+    return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+  }
+
+  const { data: confirmed, error: confirmError } = await supabase
+    .from("study_coaching_sessions")
+    .update({ status: "확정", confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .eq("group_id", groupId)
+    .in("status", ["제안", "가능"])
+    .select("id");
+
+  if (!confirmError && (!confirmed || confirmed.length === 0)) {
+    // 읽은 뒤 그 사이에 '불가' 회신 등으로 상태가 바뀌었다.
+    return jsonResponse({ error: "일정 상태가 바뀌었습니다. 새로고침 후 다시 시도해 주세요." }, 409);
+  }
+  if (confirmError) {
+    console.error("[study-submit] 코칭 일정 확정 실패:", confirmError);
+    return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+  }
+
+  return null;
+}
+
+interface AssignedExpert {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
+/**
+ * 전문가 본인확인 + 배정 확인.
+ * 팀에 배정된 전문가 행을 가져와 성명·연락처가 모두 맞을 때만 연다. 미존재·불일치·미배정을
+ * 같은 404로 통일해 팀·전문가 존재 여부를 노출하지 않는다(verifyLeader와 같은 방침).
+ */
+async function verifyExpertAssignment(
+  supabase: Client,
+  groupId: string,
+  expertName: string,
+  expertPhone: string
+) {
+  const { data: group, error: groupError } = await supabase
+    .from("study_groups")
+    .select("id, code, name, status, expert_id, leader_name, leader_email")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupError) return { error: jsonResponse({ error: "조회 중 오류가 발생했습니다." }, 500) };
+
+  const expertId = (group as any)?.expert_id ?? null;
+  let expert: AssignedExpert | null = null;
+
+  if (expertId) {
+    const { data } = await supabase
+      .from("study_expert_applications")
+      .select("id, name, phone, email")
+      .eq("id", expertId)
+      .eq("status", "selected")
+      .maybeSingle();
+    expert = (data as AssignedExpert | null) ?? null;
+  }
+
+  const mismatch =
+    !group ||
+    !expert ||
+    expert.name !== expertName ||
+    normalizePhone(expert.phone) !== normalizePhone(expertPhone);
+
+  if (mismatch) return { error: jsonResponse({ error: EXPERT_IDENTITY_ERROR }, 404) };
+  return { group: group as Record<string, any>, expert: expert as AssignedExpert };
 }
 
 /** 본인확인. 미존재/불일치를 같은 404로 통일해 팀 존재 여부를 노출하지 않는다. */
 async function verifyLeader(supabase: Client, groupId: string, leaderName: string, leaderPhone: string) {
   const { data, error } = await supabase
     .from("study_groups")
-    .select("id, code, status, leader_name, leader_phone, round_id, period_start, period_end")
+    .select(
+      "id, code, name, status, leader_name, leader_phone, leader_email, expert_id, round_id, period_start, period_end"
+    )
     .eq("id", groupId)
     .maybeSingle();
 
@@ -489,6 +766,140 @@ Deno.serve(async (req: Request) => {
   }
 
   // --------------------------------------------------------------------------
+  // 1-4. 코칭 일정 — 전문가 경로. groupId가 있지만 대표자 신원이 없으므로
+  //      아래 verifyLeader 블록보다 먼저 처리한다.
+  // --------------------------------------------------------------------------
+  if (
+    body.kind === "expert-coaching-propose" ||
+    body.kind === "expert-coaching-respond" ||
+    body.kind === "expert-coaching-confirm" ||
+    body.kind === "expert-coaching-memo"
+  ) {
+    const verifiedExpert = await verifyExpertAssignment(
+      supabase,
+      body.groupId,
+      body.expertName,
+      body.expertPhone
+    );
+    if ("error" in verifiedExpert) return verifiedExpert.error;
+    const { group: expertGroup, expert } = verifiedExpert;
+
+    if (!COACHING_STATUSES.includes(expertGroup.status)) {
+      return jsonResponse({ error: "운영 중인 연구모임만 코칭 일정을 잡을 수 있습니다." }, 400);
+    }
+
+    if (body.kind === "expert-coaching-memo") {
+      const { error } = await supabase.from("study_coaching_memos").insert({
+        group_id: body.groupId,
+        author_role: "전문가",
+        author_name: expert.name,
+        body: body.body,
+      });
+      if (error) {
+        console.error("[study-submit] 코칭 메모 저장 실패:", error);
+        return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+      }
+      return jsonResponse({ ok: true });
+    }
+
+    if (body.kind === "expert-coaching-propose") {
+      if (!isValidTimeRange(body.startTime, body.endTime)) {
+        return jsonResponse({ error: COACHING_TIME_ERROR }, 400);
+      }
+      const { data: created, error } = await supabase
+        .from("study_coaching_sessions")
+        .insert({
+          group_id: body.groupId,
+          session_no: body.sessionNo,
+          met_at: body.metAt,
+          start_time: body.startTime,
+          end_time: body.endTime,
+          location: body.location,
+          status: "제안",
+          proposed_by: "전문가",
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (error || !created) {
+        console.error("[study-submit] 코칭 일정 제안 실패:", error);
+        return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+      }
+
+      await enqueueCoachingNotice(supabase, expertGroup, "코칭_제안", expertGroup.leader_email, {
+        성명: expertGroup.leader_name,
+        회차: COACHING_SESSION_LABELS[body.sessionNo] ?? `${body.sessionNo}차`,
+        일시: coachingWhen(body.metAt, body.startTime, body.endTime),
+        장소: body.location,
+      });
+
+      return jsonResponse({ ok: true, sessionId: created.id });
+    }
+
+    // 회신·확정은 대상 제안이 이 팀의 것이어야 한다.
+    const { data: session, error: sessionError } = await supabase
+      .from("study_coaching_sessions")
+      .select("id, session_no, met_at, start_time, end_time, location, status")
+      .eq("id", body.sessionId)
+      .eq("group_id", body.groupId)
+      .maybeSingle();
+
+    if (sessionError) return jsonResponse({ error: "조회 중 오류가 발생했습니다." }, 500);
+    if (!session) return jsonResponse({ error: "코칭 일정을 찾을 수 없습니다." }, 404);
+
+    const row = session as Record<string, any>;
+    const when = coachingWhen(row.met_at, row.start_time, row.end_time);
+    const sessionLabel = COACHING_SESSION_LABELS[row.session_no] ?? `${row.session_no}차`;
+
+    if (body.kind === "expert-coaching-respond") {
+      if (row.status === "확정") {
+        return jsonResponse({ error: "이미 확정된 일정입니다." }, 400);
+      }
+
+      const { error } = await supabase
+        .from("study_coaching_sessions")
+        .update({ status: body.response, expert_note: body.note })
+        .eq("id", body.sessionId)
+        .eq("group_id", body.groupId)
+        .neq("status", "확정");
+
+      if (error) {
+        console.error("[study-submit] 코칭 회신 실패:", error);
+        return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+      }
+
+      await enqueueCoachingNotice(supabase, expertGroup, "코칭_응답", expertGroup.leader_email, {
+        성명: expertGroup.leader_name,
+        회차: sessionLabel,
+        일시: when,
+        장소: row.location,
+        회신: body.note ? `${body.response} (${body.note})` : body.response,
+      });
+
+      return jsonResponse({ ok: true });
+    }
+
+    // expert-coaching-confirm
+    const confirmError = await confirmCoachingSession(
+      supabase,
+      body.groupId,
+      body.sessionId,
+      "전문가",
+      `전문가 ${expert.name}`
+    );
+    if (confirmError) return confirmError;
+
+    await enqueueCoachingNotice(supabase, expertGroup, "코칭_확정", expertGroup.leader_email, {
+      성명: expertGroup.leader_name,
+      회차: sessionLabel,
+      일시: when,
+      장소: row.location,
+    });
+
+    return jsonResponse({ ok: true });
+  }
+
+  // --------------------------------------------------------------------------
   // 이하 모든 요청은 본인확인을 통과해야 한다.
   // --------------------------------------------------------------------------
   const verified = await verifyLeader(supabase, body.groupId, body.leaderName, body.leaderPhone);
@@ -664,6 +1075,149 @@ Deno.serve(async (req: Request) => {
       charCount,
       submitted: body.submit,
     });
+  }
+
+  /** 코칭 착수도 운영 시작으로 본다 — 회의록의 markInProgress와 같은 취지. */
+  async function markInProgressForCoaching() {
+    if (group.status === "selected") {
+      await supabase
+        .from("study_groups")
+        .update({ status: "in_progress" })
+        .eq("id", group.id)
+        .eq("status", "selected");
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 2-2. 코칭 일정 — 팀 경로. 회의록과 같은 운영 상태에서만 열린다.
+  // --------------------------------------------------------------------------
+  if (
+    body.kind === "coaching-propose" ||
+    body.kind === "coaching-confirm" ||
+    body.kind === "coaching-delete" ||
+    body.kind === "coaching-memo"
+  ) {
+    if (!COACHING_STATUSES.includes(group.status)) {
+      return jsonResponse({ error: "선발된 연구모임만 코칭 일정을 잡을 수 있습니다." }, 400);
+    }
+    if (!group.expert_id) {
+      return jsonResponse(
+        { error: "아직 전문가가 배정되지 않았습니다. 배정 후 일정을 잡을 수 있습니다." },
+        400
+      );
+    }
+
+    const expert = await (async () => {
+      const { data } = await supabase
+        .from("study_expert_applications")
+        .select("name, email")
+        .eq("id", group.expert_id)
+        .maybeSingle();
+      return (data as { name: string; email: string } | null) ?? null;
+    })();
+
+    if (body.kind === "coaching-memo") {
+      const { error } = await supabase.from("study_coaching_memos").insert({
+        group_id: body.groupId,
+        author_role: "팀",
+        author_name: body.leaderName,
+        body: body.body,
+      });
+      if (error) {
+        console.error("[study-submit] 코칭 메모 저장 실패:", error);
+        return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+      }
+      return jsonResponse({ ok: true });
+    }
+
+    if (body.kind === "coaching-propose") {
+      if (!isValidTimeRange(body.startTime, body.endTime)) {
+        return jsonResponse({ error: COACHING_TIME_ERROR }, 400);
+      }
+      const { data: created, error } = await supabase
+        .from("study_coaching_sessions")
+        .insert({
+          group_id: body.groupId,
+          session_no: body.sessionNo,
+          met_at: body.metAt,
+          start_time: body.startTime,
+          end_time: body.endTime,
+          location: body.location,
+          status: "제안",
+          proposed_by: "팀",
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (error || !created) {
+        console.error("[study-submit] 코칭 일정 제안 실패:", error);
+        return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+      }
+
+      await enqueueCoachingNotice(supabase, group, "코칭_제안", expert?.email ?? "", {
+        성명: expert?.name ?? "",
+        회차: COACHING_SESSION_LABELS[body.sessionNo] ?? `${body.sessionNo}차`,
+        일시: coachingWhen(body.metAt, body.startTime, body.endTime),
+        장소: body.location,
+      });
+
+      await markInProgressForCoaching();
+      return jsonResponse({ ok: true, sessionId: created.id });
+    }
+
+    const { data: session, error: sessionError } = await supabase
+      .from("study_coaching_sessions")
+      .select("id, session_no, met_at, start_time, end_time, location, status, proposed_by")
+      .eq("id", body.sessionId)
+      .eq("group_id", body.groupId)
+      .maybeSingle();
+
+    if (sessionError) return jsonResponse({ error: "조회 중 오류가 발생했습니다." }, 500);
+    if (!session) return jsonResponse({ error: "코칭 일정을 찾을 수 없습니다." }, 404);
+
+    const row = session as Record<string, any>;
+
+    if (body.kind === "coaching-delete") {
+      if (row.status === "확정") {
+        return jsonResponse({ error: "확정된 일정은 삭제할 수 없습니다." }, 400);
+      }
+      if (row.proposed_by !== "팀") {
+        return jsonResponse({ error: "전문가가 올린 제안은 삭제할 수 없습니다." }, 400);
+      }
+
+      const { error } = await supabase
+        .from("study_coaching_sessions")
+        .delete()
+        .eq("id", body.sessionId)
+        .eq("group_id", body.groupId)
+        .neq("status", "확정");
+
+      if (error) {
+        console.error("[study-submit] 코칭 일정 삭제 실패:", error);
+        return jsonResponse({ error: "삭제 중 오류가 발생했습니다." }, 500);
+      }
+      return jsonResponse({ ok: true });
+    }
+
+    // coaching-confirm
+    const confirmError = await confirmCoachingSession(
+      supabase,
+      body.groupId,
+      body.sessionId,
+      "팀",
+      `대표자 ${body.leaderName}`
+    );
+    if (confirmError) return confirmError;
+
+    await enqueueCoachingNotice(supabase, group, "코칭_확정", expert?.email ?? "", {
+      성명: expert?.name ?? "",
+      회차: COACHING_SESSION_LABELS[row.session_no] ?? `${row.session_no}차`,
+      일시: coachingWhen(row.met_at, row.start_time, row.end_time),
+      장소: row.location,
+    });
+
+    await markInProgressForCoaching();
+    return jsonResponse({ ok: true });
   }
 
   // --------------------------------------------------------------------------

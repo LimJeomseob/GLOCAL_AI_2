@@ -17,7 +17,9 @@ import {
 } from "@/lib/studyFormPdf";
 import {
   aggregateWorkshopDemand,
+  assignStudyGroupExpert,
   deleteStudyGroups,
+  fetchStudyExpertApplications,
   fetchStudyGroups,
   fetchStudyRounds,
   finalizeStudyReview,
@@ -28,10 +30,12 @@ import {
   STUDY_EDUCATION_MODES,
   STUDY_PROGRESS_METHODS,
   STUDY_WORKSHOP_STEPS,
+  studyCoachingSessionLabel,
 } from "@/lib/studyGroupConstants";
 import {
   STUDY_GROUP_STATUSES,
   STUDY_STATUS_LABELS,
+  type StudyExpertApplication,
   type StudyGroupStatus,
   type StudyGroupWithRelations,
   type StudyRound,
@@ -58,6 +62,8 @@ export function StudyGroupsTable() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
+  /** 배정 후보 — 이 회차에서 선정된 전문가만 배정할 수 있다. */
+  const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
   const [busy, setBusy] = useState(false);
   // 상세 모달 안에서 보여줄 PDF 생성 오류. 페이지 상단 error 배너는 모달 뒤에 가려진다.
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -66,6 +72,7 @@ export function StudyGroupsTable() {
   const detailTitleId = useId();
   const demandTitleId = useId();
   const multiDeptSelectId = useId();
+  const expertSelectId = useId();
 
   useEffect(() => {
     let active = true;
@@ -92,8 +99,12 @@ export function StudyGroupsTable() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchStudyGroups(id);
+      const [data, expertRows] = await Promise.all([
+        fetchStudyGroups(id),
+        fetchStudyExpertApplications(id),
+      ]);
       setGroups(data);
+      setExperts(expertRows.filter((e) => e.status === "selected"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "연구모임을 불러오지 못했습니다.");
     } finally {
@@ -149,6 +160,34 @@ export function StudyGroupsTable() {
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, status: status as StudyGroupStatus } : g))
     );
+  }
+
+  /** 전문가 배정. 빈 값이면 배정 해제. */
+  async function handleAssignExpert(groupId: string, rawExpertId: string) {
+    const expertId = rawExpertId || null;
+    setBusy(true);
+    setNotice(null);
+    const message = await assignStudyGroupExpert(groupId, expertId);
+    setBusy(false);
+
+    if (message) {
+      setError(message);
+      return;
+    }
+    const expert = expertId ? (experts.find((e) => e.id === expertId) ?? null) : null;
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              expert_id: expertId,
+              expert_assigned_at: expertId ? new Date().toISOString() : null,
+              expert,
+            }
+          : g
+      )
+    );
+    setNotice(expert ? `전문가 ${expert.name} 님을 배정했습니다.` : "전문가 배정을 해제했습니다.");
   }
 
   /** 복수 학과 판정 수동 보정 — "auto" | "yes" | "no" */
@@ -416,6 +455,7 @@ export function StudyGroupsTable() {
                 <th scope="col" className="px-3 py-3 text-right font-semibold">인원</th>
                 <th scope="col" className="px-3 py-3 font-semibold">진행방법</th>
                 <th scope="col" className="px-3 py-3 font-semibold">교육형태</th>
+                <th scope="col" className="px-3 py-3 font-semibold">배정 전문가</th>
                 <th scope="col" className="px-3 py-3 font-semibold">제출</th>
                 <th scope="col" className="px-3 py-3 text-right font-semibold">총점/순위</th>
                 <th scope="col" className="px-3 py-3 font-semibold">상태</th>
@@ -425,7 +465,7 @@ export function StudyGroupsTable() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={13} className="px-3 py-10 text-center text-slate-500">
                     조건에 맞는 연구모임이 없습니다.
                   </td>
                 </tr>
@@ -475,6 +515,19 @@ export function StudyGroupsTable() {
                       title={STUDY_EDUCATION_MODES.find((m) => m.key === g.education_mode)?.label}
                     >
                       {g.education_mode ?? "–"}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-slate-700">
+                      {g.expert ? (
+                        <>
+                          <span className="block font-semibold text-slate-800">{g.expert.name}</span>
+                          <span className="mt-0.5 block text-slate-500">
+                            코칭 확정{" "}
+                            {g.coachingSessions.filter((s) => s.status === "확정").length}/3
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-slate-400">미배정</span>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-600">
                       계획 {g.plan?.submitted_at ? "✓" : "–"} · 회의 {g.meetings.length} · 보고{" "}
@@ -540,6 +593,90 @@ export function StudyGroupsTable() {
               {STUDY_EDUCATION_MODES.find((m) => m.key === detail.education_mode)?.label ?? "미선택"}
             </p>
 
+            {/* 전문가 배정 — 배정해야 팀·전문가 화면의 코칭 일정 조율이 열린다 */}
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <label htmlFor={expertSelectId} className="font-semibold text-slate-700">
+                  배정 전문가
+                </label>
+                <select
+                  id={expertSelectId}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                  value={detail.expert_id ?? ""}
+                  disabled={busy}
+                  onChange={(e) => void handleAssignExpert(detail.id, e.target.value)}
+                >
+                  <option value="">미배정</option>
+                  {experts.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name} ({e.affiliation})
+                    </option>
+                  ))}
+                </select>
+                {detail.expert ? (
+                  <span className="text-slate-500">
+                    {detail.expert.phone} · {detail.expert.email}
+                  </span>
+                ) : (
+                  <span className="text-slate-500">
+                    배정하면 팀과 전문가가 코칭 일정을 잡을 수 있습니다.
+                  </span>
+                )}
+              </div>
+
+              {experts.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  이 회차에 선정된 전문가가 없습니다. 「전문가 신청자」 탭에서 상태를 선정으로 바꾸면
+                  배정 후보에 나타납니다.
+                </p>
+              )}
+
+              {detail.coachingSessions.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1 text-xs text-slate-600" role="list">
+                  {detail.coachingSessions.map((s) => (
+                    <li key={s.id}>
+                      <span className="font-semibold text-slate-700">
+                        {studyCoachingSessionLabel(s.session_no)}
+                      </span>{" "}
+                      {formatDate(s.met_at)}
+                      {s.start_time && ` ${s.start_time.slice(0, 5)}`}
+                      {s.end_time && `~${s.end_time.slice(0, 5)}`}
+                      {s.location && ` · ${s.location}`}
+                      <span
+                        className={
+                          s.status === "확정"
+                            ? "ml-2 font-bold text-brand"
+                            : "ml-2 text-slate-500"
+                        }
+                      >
+                        {s.status}
+                      </span>
+                      {s.expert_note && (
+                        <span className="ml-2 text-slate-400">({s.expert_note})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {detail.coachingMemos.length > 0 && (
+                <div className="mt-3 border-t border-slate-200 pt-2">
+                  <p className="text-xs font-semibold text-slate-700">조율 메모</p>
+                  <ul className="mt-1 flex flex-col gap-1 text-xs text-slate-600" role="list">
+                    {detail.coachingMemos.map((m) => (
+                      <li key={m.id}>
+                        <span className="font-semibold text-slate-500">
+                          {m.author_role}
+                          {m.author_name && ` ${m.author_name}`}
+                        </span>{" "}
+                        {m.body}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
             {/* 복수 학과 판정 — 자동(소속 정규화 비교)이 놓친 표기 차이는 여기서 관리자가 확정한다 */}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <label htmlFor={multiDeptSelectId} className="font-semibold text-slate-700">
@@ -578,7 +715,7 @@ export function StudyGroupsTable() {
             <ul className="mt-2 space-y-1 text-sm text-slate-600" role="list">
               {detail.members.map((m) => (
                 <li key={m.id}>
-                  · {m.name} ({m.affiliation} · {m.position} · {m.id_number})
+                  · {m.name} ({[m.affiliation, m.position, m.id_number, m.phone, m.email].filter(Boolean).join(" · ")})
                   {m.is_leader && <span className="ml-1 text-xs font-semibold text-brand">대표</span>}
                 </li>
               ))}

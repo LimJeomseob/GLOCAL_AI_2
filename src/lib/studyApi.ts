@@ -5,6 +5,8 @@ import { extractFunctionError } from "./functionError";
 import { TABLES } from "./db-tables";
 import type {
   StudyApplyRoundInfo,
+  StudyExpertIdentity,
+  StudyExpertLookupResult,
   StudyGroupStatus,
   StudyIdentity,
   StudyLookupResult,
@@ -138,7 +140,42 @@ export async function lookupStudyGroups(
     if (!data || !Array.isArray(data.results)) {
       return { data: null, error: "응답을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요." };
     }
-    return { data: data.results as StudyLookupResult[], error: null };
+    // 함수가 이 화면보다 옛 버전이어도(배포 순서가 어긋나도) 화면이 깨지지 않도록 새 필드를 채운다.
+    const results = (data.results as StudyLookupResult[]).map((r) => ({
+      ...r,
+      members: (r.members ?? []).map((m) => ({ ...m, phone: m.phone ?? "", email: m.email ?? "" })),
+      expert: r.expert ?? null,
+      coachingSessions: r.coachingSessions ?? [],
+      coachingMemos: r.coachingMemos ?? [],
+    }));
+    return { data: results, error: null };
+  } catch {
+    return { data: null, error: "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+}
+
+/**
+ * 전문가 성명+연락처로 배정된 팀을 조회한다. 대표자 조회와 같은 규약 —
+ * 불일치는 에러가 아니라 빈 결과(null)다.
+ */
+export async function lookupExpertGroups(
+  identity: StudyExpertIdentity
+): Promise<StudyApiResult<StudyExpertLookupResult | null>> {
+  const supabase = createSupabaseBrowserClient();
+  try {
+    const { data, error } = await supabase.functions.invoke("study-expert-lookup", {
+      body: identity,
+    });
+
+    if (error) {
+      return { data: null, error: await extractFunctionError(error, "조회 중 오류가 발생했습니다.") };
+    }
+    if (!data) {
+      return { data: null, error: "응답을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요." };
+    }
+    // 일치하는 전문가가 없으면 서버가 { expert: null }을 준다.
+    if (!data.expert) return { data: null, error: null };
+    return { data: data as StudyExpertLookupResult, error: null };
   } catch {
     return { data: null, error: "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -206,6 +243,43 @@ export function clearStudyIdentity(): void {
   }
 }
 
+/**
+ * 전문가 신원은 대표자 신원과 키를 나눈다 — 한 브라우저에서 두 역할을 오갈 때
+ * 한쪽 신원으로 다른 쪽 게이트가 열리려다 실패하는 일을 막는다.
+ */
+const EXPERT_IDENTITY_KEY = "gnu.study.expert-identity";
+
+export function readExpertIdentity(): StudyExpertIdentity | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(EXPERT_IDENTITY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StudyExpertIdentity;
+    if (!parsed?.expertName || !parsed?.expertPhone) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writeExpertIdentity(identity: StudyExpertIdentity): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(EXPERT_IDENTITY_KEY, JSON.stringify(identity));
+  } catch {
+    // 프라이빗 모드 등에서 저장이 막혀도 다시 입력하면 되므로 무시한다.
+  }
+}
+
+export function clearExpertIdentity(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(EXPERT_IDENTITY_KEY);
+  } catch {
+    // 무시
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 진행 상태 → 다음 할 일
 // ---------------------------------------------------------------------------
@@ -216,8 +290,26 @@ export interface StudyNextStep {
   href: string | null;
 }
 
+/** 확정된 코칭 회차 수. 회차(1~3)별로 확정은 최대 1건이다(DB 부분 유니크). */
+export function countConfirmedCoaching(result: StudyLookupResult): number {
+  return result.coachingSessions.filter((s) => s.status === "확정").length;
+}
+
 /** '내 연구모임' 탭의 CTA. 상태마다 팀이 지금 해야 할 일 하나만 제시한다. */
 export function deriveNextStep(result: StudyLookupResult): StudyNextStep {
+  // 운영 단계에서 전문가가 배정됐는데 코칭 3회가 아직 안 잡혔다면 일정 잡기가 먼저다.
+  if (
+    (result.status === "selected" || result.status === "in_progress") &&
+    result.expert &&
+    countConfirmedCoaching(result) < 3
+  ) {
+    return {
+      label: "코칭 일정 잡기",
+      description: `배정 전문가 ${result.expert.name} 님과 코칭 3회(기획·제작·환류) 일정을 조율해 주세요.`,
+      href: "/coaching",
+    };
+  }
+
   switch (result.status) {
     case "draft":
       return {

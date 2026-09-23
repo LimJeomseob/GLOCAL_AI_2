@@ -29,11 +29,16 @@
     행 삭제는 여전히 관리자 포털에서만 가능
   - `supabase/functions/issue-certificate` — 본인확인 후 이수 건 수료증 발급(발급번호 채번·서식 전달)
   - `supabase/functions/study-lookup` — 대표자 성명+연락처가 일치하는 연구모임과 그 팀의 계획서·회의록·
-    결과보고서·산출물을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
+    결과보고서·산출물·배정 전문가·코칭 일정을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
+  - `supabase/functions/study-expert-lookup` — **선정된** 전문가의 성명+연락처가 일치하면 그에게 배정된
+    연구모임과 코칭 일정·조율 메모를 반환(`0026`). 배정 관계가 확인된 범위에서만 팀 대표자 연락처를 노출합니다.
   - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/
-    expert-apply/plan/meeting-save/meeting-delete/report)로 갈리는 판별 유니온. `apply-edit`은 '내 연구모임'
+    expert-apply/plan/meeting-save/meeting-delete/report/coaching-*/expert-coaching-*)로 갈리는 판별 유니온.
+    `apply-edit`은 '내 연구모임'
     탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `expert-apply`는 연구모임을 코칭할
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
+    `coaching-*`은 팀(대표자 본인확인), `expert-coaching-*`은 전문가(성명+연락처 본인확인 + 배정 확인)가
+    코칭 일정을 제안·회신·확정하고 메모를 남기는 경로입니다(`0026`).
     이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
     Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가
     있으면 "Module not found"로 배포가 실패합니다. 운영 담당자가 CLI 없이 대시보드에서 고쳐
@@ -57,9 +62,9 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0024`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0026`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0024` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0026` 연구모임 트랙
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -89,6 +94,7 @@ supabase functions deploy cancel-application
 supabase functions deploy study-lookup
 supabase functions deploy study-submit
 supabase functions deploy study-notify
+supabase functions deploy study-expert-lookup
 ```
 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 는 Supabase가 모든 Edge Function에
 자동으로 주입합니다. **대표자 안내 메일(`study-notify`)만 발송 서비스 시크릿이 따로 필요합니다**:
@@ -133,12 +139,18 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
 ## 폴더 구조 메모
 
 - `src/app/(study)` — 공개 탭. 라우트가 곧 루트입니다:
-  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup` · `/expert-apply`(교내 AI활용 전문가 신청)
+  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/coaching`(코칭 일정 조율) · `/report` · `/lookup` ·
+  `/expert-apply`(교내 AI활용 전문가 신청) · `/expert-teams`(전문가의 배정 팀 확인)
+  - 코칭 일정은 팀이 제안 → 전문가가 가능/불가 회신 → 어느 한쪽이 확정하는 흐름입니다. 회차(기획·제작·환류)마다
+    제안이 여러 건 쌓일 수 있고 확정은 1건만 남습니다(DB 부분 유니크). 팀·전문가 화면은 같은 패널
+    (`CoachingSchedulePanel`)을 씁니다.
 - `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 · 전문가 신청자 ·
   참여이력 관리 · 안내 발송 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
   - 공개 수정 경로(`study-submit`)는 신청 마감·심사 착수 전까지만 열리므로, 그 뒤의 정정은 관리자 화면에서
     합니다. **연구모임 관리**의 상세 팝업에서 신청서·참여자·윤리 다짐·계획서를 직접 고치고,
-    **전문가 신청자** 탭에서 접수 건을 추가·수정·삭제합니다. 두 경로 모두 Edge Function을 거치지 않고
+    **전문가 신청자** 탭에서 접수 건을 추가·수정·삭제합니다. **팀-전문가 배정도 관리자만** 합니다 —
+    「연구모임 관리」 상세 팝업의 `배정 전문가` 선택이며, 배정해야 팀·전문가의 코칭 일정 화면이 열립니다(`0026`).
+    두 경로 모두 Edge Function을 거치지 않고
     관리자 브라우저에서 RLS `is_admin()`으로 테이블을 직접 갱신하며(`src/lib/studyAdmin.ts`),
     접수 구간·팀 규모 검사는 DB 트리거가 관리자에게 면제합니다(`0013`·`0019`).
     인원(`member_count`)과 복수학과(`is_multi_dept`)는 트리거가 재계산하므로 화면에서 쓰지 않습니다.

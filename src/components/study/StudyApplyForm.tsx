@@ -6,7 +6,12 @@ import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, formatDateTime, formatPhoneInput } from "@/lib/format";
-import { studyApplySchema, validateMembers, isMultiDepartment } from "@/lib/studyValidation";
+import {
+  studyApplySchema,
+  studyMemberSchema,
+  validateMembers,
+  isMultiDepartment,
+} from "@/lib/studyValidation";
 import type { StudyEthicsPledge, StudyMemberInput } from "@/lib/studyValidation";
 import { deriveStudyRoundWindow, submitStudy, writeStudyIdentity } from "@/lib/studyApi";
 import {
@@ -56,6 +61,8 @@ const EMPTY_MEMBER: StudyMemberInput = {
   name: "",
   affiliation: "",
   position: "",
+  phone: "",
+  email: "",
   isLeader: false,
 };
 
@@ -98,6 +105,8 @@ export function buildApplyInitialValues(
       name: m.name,
       affiliation: m.affiliation,
       position: m.position,
+      phone: m.phone,
+      email: m.email,
       isLeader: false,
     })),
   };
@@ -161,6 +170,8 @@ export function StudyApplyForm(props: StudyApplyFormProps) {
     name: form.leaderName,
     affiliation: form.leaderAffiliation,
     position: form.leaderPosition,
+    phone: form.leaderPhone,
+    email: form.leaderEmail,
     isLeader: true,
   };
   const allMembers = [leaderRow, ...members];
@@ -231,13 +242,20 @@ export function StudyApplyForm(props: StudyApplyFormProps) {
       leaderIdNumber: parsed.data.leaderIdNumber,
       leaderEmail: parsed.data.leaderEmail,
       hasNontenured: parsed.data.hasNontenured,
-      members: allMembers.map((m) => ({
-        idNumber: m.idNumber.trim(),
-        name: m.name.trim(),
-        affiliation: m.affiliation.trim(),
-        position: m.position.trim(),
-        isLeader: m.isLeader,
-      })),
+      // validate()를 통과한 명단이므로 parse가 던지지 않는다. 연락처는 phoneSchema가
+      // 010-####-####로 정규화한 값을 보낸다(대표자 연락처 저장 형식과 동일).
+      members: allMembers.map((m) => {
+        const row = studyMemberSchema.parse(m);
+        return {
+          idNumber: row.idNumber,
+          name: row.name,
+          affiliation: row.affiliation,
+          position: row.position,
+          phone: row.phone,
+          email: row.email,
+          isLeader: row.isLeader,
+        };
+      }),
       consent: true as const,
     };
 
@@ -511,7 +529,8 @@ export function StudyApplyForm(props: StudyApplyFormProps) {
           </legend>
 
           <p className="mb-4 text-xs leading-relaxed text-slate-500">
-            대표자는 첫 행에 자동으로 포함됩니다. 나머지 참여자를 추가해 주세요.
+            대표자는 첫 행에 자동으로 포함됩니다. 나머지 참여자를 추가하고 참여자별 연락처·이메일을
+            입력해 주세요.
             {multiDept && (
               <span className="ml-1 font-semibold text-amber-700">
                 복수 학과로 구성되어 가산점 대상입니다.
@@ -538,7 +557,7 @@ export function StudyApplyForm(props: StudyApplyFormProps) {
             {members.map((member, index) => (
               <div
                 key={index}
-                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
+                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-3"
               >
                 <FormField label={`직번 ${index + 2}`}>
                   {(inputProps) => (
@@ -585,7 +604,31 @@ export function StudyApplyForm(props: StudyApplyFormProps) {
                     />
                   )}
                 </FormField>
-                <div className="flex items-end">
+                <FormField label="연락처">
+                  {(inputProps) => (
+                    <input
+                      {...inputProps}
+                      type="tel"
+                      className={inputBaseClass}
+                      value={member.phone}
+                      placeholder="010-1234-5678"
+                      onChange={(e) => updateMember(index, "phone", formatPhoneInput(e.target.value))}
+                    />
+                  )}
+                </FormField>
+                <FormField label="이메일">
+                  {(inputProps) => (
+                    <input
+                      {...inputProps}
+                      type="email"
+                      className={inputBaseClass}
+                      value={member.email}
+                      placeholder="example@gnu.ac.kr"
+                      onChange={(e) => updateMember(index, "email", e.target.value)}
+                    />
+                  )}
+                </FormField>
+                <div className="flex justify-end sm:col-span-3">
                   <Button
                     type="button"
                     variant="ghost"

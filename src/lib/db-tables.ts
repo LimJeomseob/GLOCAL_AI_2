@@ -23,6 +23,8 @@ export const TABLES = {
   STUDY_NOTIFICATION_TEMPLATES: "study_notification_templates",
   STUDY_PRIOR_PARTICIPATIONS: "study_prior_participations",
   STUDY_EXPERT_APPLICATIONS: "study_expert_applications",
+  STUDY_COACHING_SESSIONS: "study_coaching_sessions",
+  STUDY_COACHING_MEMOS: "study_coaching_memos",
 } as const;
 
 export const CERTIFICATES_BUCKET = "certificates";
