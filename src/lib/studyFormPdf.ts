@@ -25,6 +25,7 @@ import {
   type StudyLookupResult,
   type WorkshopPreference,
 } from "@/lib/studyTypes";
+import { formatWorkshopSlot, getWorkshopSlot } from "@/lib/workshopPref";
 
 /**
  * [서식 1] 신청서·연구계획서 제출본 PDF.
@@ -677,15 +678,27 @@ export async function buildStudyPlanPdf(data: StudyFormPdfData): Promise<Uint8Ar
     }
   }
 
-  writer.heading("단계별 워크숍 희망일");
+  writer.heading("단계별 워크숍 희망일·시작 시간");
   writer.grid(
     [
-      { header: "단계", ratio: 0.4 },
-      ...STUDY_WORKSHOP_OPTIONS.map((o) => ({ header: o.label, ratio: 0.3, align: "center" as const })),
+      { header: "단계", ratio: 0.34 },
+      ...STUDY_WORKSHOP_OPTIONS.map((o) => ({
+        header: o.label,
+        ratio: 0.33,
+        align: "center" as const,
+      })),
     ],
     STUDY_WORKSHOP_STEPS.map((step) => [
       `${step.order}차 ${step.name} (${step.hours}시간) — ${step.detail}`,
-      ...STUDY_WORKSHOP_OPTIONS.map((o) => safeDate(plan.workshopPref[o.key]?.[step.key])),
+      ...STUDY_WORKSHOP_OPTIONS.map((o) =>
+        // 종료 시각은 단계별 시간(3H)으로 계산해 함께 적는다 — 강사 배정표를 그대로 옮겨 쓸 수 있게.
+        formatWorkshopSlot(
+          getWorkshopSlot(plan.workshopPref, o.key, step.key),
+          step.hours,
+          formatDate,
+          "–"
+        )
+      ),
     ])
   );
 

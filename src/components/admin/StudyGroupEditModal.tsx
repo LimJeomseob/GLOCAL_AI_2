@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
+import { WorkshopPrefTable } from "@/components/study/WorkshopPrefTable";
 import { formatPhoneInput } from "@/lib/format";
 import {
   countChars,
@@ -24,8 +25,6 @@ import {
   STUDY_ETHICS_PRINCIPLES,
   STUDY_PLAN_SECTIONS,
   STUDY_PROGRESS_METHODS,
-  STUDY_WORKSHOP_OPTIONS,
-  STUDY_WORKSHOP_STEPS,
 } from "@/lib/studyGroupConstants";
 import type {
   StudyEducationMode,
@@ -173,13 +172,6 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
       else next.delete(no);
       return next;
     });
-  }
-
-  function updateWorkshopPref(optionKey: string, stepKey: string, value: string) {
-    setWorkshopPref((prev) => ({
-      ...prev,
-      [optionKey]: { ...(prev[optionKey] ?? {}), [stepKey]: value },
-    }));
   }
 
   /**
@@ -702,45 +694,13 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
             })}
 
             <div>
-              <p className="text-sm font-semibold text-slate-800">단계별 워크숍 희망일</p>
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[420px] text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                      <th className="py-2 pr-3 font-semibold">단계</th>
-                      {STUDY_WORKSHOP_OPTIONS.map((option) => (
-                        <th key={option.key} className="py-2 pr-3 font-semibold">
-                          {option.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {STUDY_WORKSHOP_STEPS.map((step) => (
-                      <tr key={step.key} className="border-b border-slate-100">
-                        <th
-                          scope="row"
-                          className="py-2 pr-3 text-left align-middle font-medium text-slate-700"
-                        >
-                          {step.order}차 {step.name}
-                        </th>
-                        {STUDY_WORKSHOP_OPTIONS.map((option) => (
-                          <td key={option.key} className="py-2 pr-3">
-                            <input
-                              type="date"
-                              aria-label={`${option.label} ${step.order}차 ${step.name} 희망일`}
-                              className={inputBaseClass}
-                              value={workshopPref[option.key]?.[step.key] ?? ""}
-                              onChange={(e) =>
-                                updateWorkshopPref(option.key, step.key, e.target.value)
-                              }
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <p className="text-sm font-semibold text-slate-800">단계별 워크숍 희망일·시작 시간</p>
+              <div className="mt-2">
+                <WorkshopPrefTable
+                  value={workshopPref}
+                  onChange={setWorkshopPref}
+                  idPrefix={`admin-workshop-${group.id}`}
+                />
               </div>
             </div>
           </div>

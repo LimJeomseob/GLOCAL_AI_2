@@ -14,6 +14,7 @@ import {
   studyPdfFilename,
 } from "@/lib/studyFormPdf";
 import { STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
+import { hasMissingWorkshopTime } from "@/lib/workshopPref";
 import {
   STUDY_STATUS_LABELS,
   type StudyGroupStatus,
@@ -268,6 +269,16 @@ export function StudyGroupSummary({
             </dd>
             {group.plan?.submittedAt && (
               <dd className="mt-1 text-xs text-slate-500">{formatDateTime(group.plan.submittedAt)}</dd>
+            )}
+            {/* 시간 입력 도입 전에 제출한 팀에게 시작 시간 추가를 안내한다 — 강사 배정에 필요한 값이다 */}
+            {planDone && hasMissingWorkshopTime(group.plan?.workshopPref) && (
+              <dd className="mt-2 text-xs font-medium text-amber-700">
+                워크숍 시작 시간 미입력 —{" "}
+                <Link href="/plan" className="underline">
+                  연구계획서 탭
+                </Link>
+                에서 추가해 주세요.
+              </dd>
             )}
             <dd className="mt-2">
               <Button

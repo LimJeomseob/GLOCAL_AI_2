@@ -6,6 +6,11 @@ import {
   STUDY_OUTPUT_TYPES,
   type StudyExpertStatus,
 } from "./studyTypes";
+import {
+  WORKSHOP_DATE_PATTERN,
+  WORKSHOP_TIME_PATTERN,
+  isWorkshopTimeKey,
+} from "./workshopPref";
 
 /**
  * AI 활용 연구모임 폼 검증 (트랙 B).
@@ -57,6 +62,33 @@ export const studyGroupAdminSchema = studyApplySchema.omit({ consent: true, roun
 
 export type StudyGroupAdminInput = z.infer<typeof studyGroupAdminSchema>;
 
+/**
+ * 단계별 워크숍 희망일·시작 시간. `${stepKey}Time` 키는 HH:MM, 나머지는 YYYY-MM-DD로 본다.
+ * Edge Function(study-submit)에도 같은 규칙이 복제돼 있다 — 별도 배포물이라 import를 공유할 수 없다.
+ */
+export const workshopPrefSchema = z
+  .record(z.record(z.string()))
+  .default({})
+  .superRefine((pref, ctx) => {
+    for (const [optionKey, option] of Object.entries(pref)) {
+      for (const [key, value] of Object.entries(option ?? {})) {
+        if (!value) continue;
+        const ok = isWorkshopTimeKey(key)
+          ? WORKSHOP_TIME_PATTERN.test(value)
+          : WORKSHOP_DATE_PATTERN.test(value);
+        if (!ok) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [optionKey, key],
+            message: isWorkshopTimeKey(key)
+              ? "시작 시간을 HH:MM 형식으로 입력해 주세요."
+              : "희망일을 날짜로 선택해 주세요.",
+          });
+        }
+      }
+    }
+  });
+
 /** 관리자 화면의 계획서 편집 — Edge Function planSchema와 같은 한도 */
 export const studyPlanAdminSchema = z.object({
   section1Topic: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
@@ -64,7 +96,7 @@ export const studyPlanAdminSchema = z.object({
   section3Platform: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
   section4Effect: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
   section5Etc: z.string().max(20000, "20,000자 이내로 작성해 주세요.").default(""),
-  workshopPref: z.record(z.record(z.string())).default({}),
+  workshopPref: workshopPrefSchema,
 });
 
 export type StudyPlanAdminInput = z.infer<typeof studyPlanAdminSchema>;

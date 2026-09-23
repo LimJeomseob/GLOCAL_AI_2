@@ -6,9 +6,11 @@ import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { LongTextField } from "@/components/ui/LongTextField";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { WorkshopPrefTable } from "@/components/study/WorkshopPrefTable";
 import { formatDateTime } from "@/lib/format";
 import { countChars } from "@/lib/studyValidation";
-import { submitStudy } from "@/lib/studyApi";
+import { canEditWorkshopPref, submitStudy } from "@/lib/studyApi";
+import { hasMissingWorkshopTime } from "@/lib/workshopPref";
 import {
   STUDY_APPLY_SIGNATURE,
   STUDY_EDUCATION_MODES,
@@ -17,7 +19,6 @@ import {
   STUDY_PLAN_WRITING_RULES,
   STUDY_PROGRESS_METHODS,
   STUDY_SIGNATURE_ADDRESSEE,
-  STUDY_WORKSHOP_OPTIONS,
   STUDY_WORKSHOP_STEPS,
 } from "@/lib/studyGroupConstants";
 import type {
@@ -134,26 +135,52 @@ export function StudyPlanForm({
     setSections((prev) => ({ ...prev, [key]: value }));
   }
 
-  function updateWorkshopPref(optionKey: string, stepKey: string, value: string) {
+  function updateWorkshopPref(next: WorkshopPreference) {
     dirtyRef.current = true;
-    setWorkshopPref((prev) => ({
-      ...prev,
-      [optionKey]: { ...(prev[optionKey] ?? {}), [stepKey]: value },
-    }));
+    setWorkshopPref(next);
+  }
+
+  /**
+   * 제출 후 「희망일·시간」만 저장하는 경로. 본문·제출 시각·분량은 건드리지 않는다.
+   * 서버(study-submit의 kind: "workshop-pref")가 상태를 다시 검사한다.
+   */
+  async function saveWorkshopPrefOnly() {
+    setSaving(true);
+    setMessage(null);
+
+    const { error } = await submitStudy({
+      kind: "workshop-pref",
+      groupId: group.groupId,
+      ...identity,
+      workshopPref,
+    });
+    setSaving(false);
+
+    if (error) {
+      setMessage({ type: "error", text: error });
+      return;
+    }
+    setMessage({ type: "success", text: "워크숍 희망일·시작 시간을 저장했습니다." });
+    await refresh();
   }
 
   if (locked) {
+    const prefEditable = canEditWorkshopPref(group.status);
+    const missingTime = hasMissingWorkshopTime(workshopPref);
+
     return (
       <div className="flex flex-col gap-5">
         <div
           role="status"
           className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-900"
         >
-          계획서가 제출되어 수정할 수 없습니다.
+          계획서가 제출되어 본문은 수정할 수 없습니다.
           {group.plan?.submittedAt && ` (제출: ${formatDateTime(group.plan.submittedAt)})`}
           <p className="mt-1 font-normal">
-            수정이 필요하면 AI융합원으로 문의해 주세요. 진행 상황은 &quot;내 연구모임&quot; 탭에서
-            확인할 수 있습니다.
+            {prefEditable
+              ? "단계별 워크숍 희망일·시작 시간은 아래 표에서 수정할 수 있습니다. 그 밖의 수정이 필요하면 AI융합원으로 문의해 주세요."
+              : "수정이 필요하면 AI융합원으로 문의해 주세요."}{" "}
+            진행 상황은 &quot;내 연구모임&quot; 탭에서 확인할 수 있습니다.
           </p>
         </div>
 
@@ -168,6 +195,57 @@ export function StudyPlanForm({
               </p>
             </div>
           ))}
+
+          <fieldset className="rounded-xl border border-slate-200 p-4 sm:p-5">
+            <legend className="px-2 text-sm font-bold text-slate-800">
+              단계별 워크숍 희망일·시작 시간
+            </legend>
+
+            {missingTime && (
+              <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                제출한 희망일에 시작 시간이 없습니다.
+                {prefEditable
+                  ? " 시작 시간을 추가해 저장해 주세요."
+                  : " 시간 추가가 필요하면 AI융합원으로 문의해 주세요."}
+              </p>
+            )}
+
+            <WorkshopPrefTable
+              value={workshopPref}
+              onChange={prefEditable ? setWorkshopPref : undefined}
+              readOnly={!prefEditable}
+              idPrefix={`plan-locked-${group.groupId}`}
+            />
+
+            {prefEditable && (
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void saveWorkshopPrefOnly()}
+                  disabled={saving}
+                >
+                  {saving ? "저장 중..." : "희망일·시간 저장"}
+                </Button>
+                <span className="text-xs text-slate-500">
+                  날짜와 시작 시간 모두 수정할 수 있습니다. 계획서 본문은 바뀌지 않습니다.
+                </span>
+              </div>
+            )}
+
+            {message && (
+              <p
+                role={message.type === "error" ? "alert" : "status"}
+                className={
+                  message.type === "error"
+                    ? "mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                    : "mt-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+                }
+              >
+                {message.text}
+              </p>
+            )}
+          </fieldset>
         </div>
 
         <Link href="/lookup">
@@ -241,48 +319,20 @@ export function StudyPlanForm({
           />
         ))}
 
-        {/* 5번의 구조화 부분 — 자유 서술과 별개로 날짜를 받아 강사 배정에 그대로 쓴다 */}
+        {/* 5번의 구조화 부분 — 자유 서술과 별개로 날짜·시작 시간을 받아 강사 배정에 그대로 쓴다 */}
         <fieldset className="rounded-xl border border-slate-200 p-4 sm:p-5">
-          <legend className="px-2 text-sm font-bold text-slate-800">단계별 워크숍 희망일</legend>
+          <legend className="px-2 text-sm font-bold text-slate-800">
+            단계별 워크숍 희망일·시작 시간
+          </legend>
           <p className="mb-4 text-xs leading-relaxed text-slate-500">
-            1안과 2안을 모두 적어 주세요. 팀별 희망일을 모아 강사 일정을 배정합니다.
+            1안과 2안을 모두 적어 주세요. 팀별 희망일과 시작 시간을 모아 강사 일정을 배정합니다.
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                  <th className="py-2 pr-3 font-semibold">단계</th>
-                  {STUDY_WORKSHOP_OPTIONS.map((option) => (
-                    <th key={option.key} className="py-2 pr-3 font-semibold">
-                      {option.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {STUDY_WORKSHOP_STEPS.map((step) => (
-                  <tr key={step.key} className="border-b border-slate-100">
-                    <th scope="row" className="py-3 pr-3 text-left align-middle font-medium text-slate-700">
-                      {step.order}차 {step.name}
-                      <span className="ml-1 text-xs font-normal text-slate-400">({step.hours}시간)</span>
-                    </th>
-                    {STUDY_WORKSHOP_OPTIONS.map((option) => (
-                      <td key={option.key} className="py-2 pr-3">
-                        <input
-                          type="date"
-                          aria-label={`${option.label} ${step.order}차 ${step.name} 희망일`}
-                          className={inputBaseClass}
-                          value={workshopPref[option.key]?.[step.key] ?? ""}
-                          onChange={(e) => updateWorkshopPref(option.key, step.key, e.target.value)}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <WorkshopPrefTable
+            value={workshopPref}
+            onChange={updateWorkshopPref}
+            idPrefix={`plan-${group.groupId}`}
+          />
         </fieldset>
 
         <div className="grid gap-5 sm:grid-cols-2">

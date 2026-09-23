@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
+import { WorkshopPrefTable } from "@/components/study/WorkshopPrefTable";
 import { formatDateTime } from "@/lib/format";
 import {
   fetchPriorParticipation,
@@ -305,6 +306,15 @@ export function StudyReviewPanel({ reviewerEmail }: { reviewerEmail: string }) {
                         </p>
                       </div>
                     ))}
+
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500">
+                        단계별 워크숍 희망일·시작 시간
+                      </p>
+                      <div className="mt-2">
+                        <WorkshopPrefTable value={selected.plan.workshop_pref ?? {}} readOnly />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">작성된 계획서가 없습니다.</p>

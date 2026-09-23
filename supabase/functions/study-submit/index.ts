@@ -107,6 +107,31 @@ const applyEditSchema = z.object({
   consent: z.literal(true),
 });
 
+/**
+ * 단계별 워크숍 희망일·시작 시간. `${stepKey}Time` 키는 HH:MM, 나머지는 YYYY-MM-DD.
+ * 화면(src/lib/studyValidation.ts의 workshopPrefSchema)과 같은 규칙이어야 한다 —
+ * 별도 배포물이라 import를 공유할 수 없어 규칙을 복제한다.
+ */
+const WORKSHOP_TIME_REGEX = /^\d{2}:\d{2}$/;
+const WORKSHOP_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const workshopPrefField = z
+  .record(z.record(z.string()))
+  .default({})
+  .refine(
+    (pref) =>
+      Object.values(pref).every((option) =>
+        Object.entries(option ?? {}).every(
+          ([key, value]) =>
+            !value ||
+            (key.endsWith("Time")
+              ? WORKSHOP_TIME_REGEX.test(value)
+              : WORKSHOP_DATE_REGEX.test(value))
+        )
+      ),
+    { message: "워크숍 희망일·시작 시간 형식을 확인해 주세요." }
+  );
+
 const planSchema = z.object({
   kind: z.literal("plan"),
   groupId: z.string().uuid(),
@@ -116,10 +141,21 @@ const planSchema = z.object({
   section3Platform: z.string().max(20000).default(""),
   section4Effect: z.string().max(20000).default(""),
   section5Etc: z.string().max(20000).default(""),
-  workshopPref: z.record(z.record(z.string())).default({}),
+  workshopPref: workshopPrefField,
   progressMethod: z.enum(["전문가코칭", "개별학습"]).nullable().default(null),
   educationMode: z.enum(["대면", "비대면"]).nullable().default(null),
   submit: z.boolean().default(false),
+});
+
+/**
+ * 제출된 계획서의 「단계별 워크숍 희망일·시작 시간」만 고치는 경로.
+ * 본문이 잠긴 뒤에도 강사 배정 일정은 조정되므로 이 한 칸만 따로 연다.
+ */
+const workshopPrefSchema = z.object({
+  kind: z.literal("workshop-pref"),
+  groupId: z.string().uuid(),
+  ...identity,
+  workshopPref: workshopPrefField,
 });
 
 const meetingSaveSchema = z.object({
@@ -193,6 +229,7 @@ const bodySchema = z.discriminatedUnion("kind", [
   applyEditSchema,
   expertApplySchema,
   planSchema,
+  workshopPrefSchema,
   meetingSaveSchema,
   meetingDeleteSchema,
   reportSchema,
@@ -213,6 +250,13 @@ const IDENTITY_ERROR = "일치하는 연구모임이 없습니다. 대표자 성
  * 클라이언트 상수 STUDY_APPLY_EDITABLE_STATUSES(src/lib/studyApi.ts)와 같은 값이어야 한다.
  */
 const APPLY_EDITABLE_STATUSES = ["draft", "submitted"];
+
+/**
+ * 계획서 본문이 잠긴 뒤에도 「단계별 워크숍 희망일·시작 시간」만은 고칠 수 있는 상태.
+ * 클라이언트 상수 STUDY_WORKSHOP_PREF_EDITABLE_STATUSES(src/lib/studyApi.ts)와 같은 값이어야 한다.
+ * draft는 계획서 저장(kind: "plan")이 본문과 함께 저장하므로 제외한다.
+ */
+const WORKSHOP_PREF_EDITABLE_STATUSES = ["submitted", "under_review", "selected", "in_progress"];
 
 type Client = ReturnType<typeof createClient>;
 
@@ -664,6 +708,37 @@ Deno.serve(async (req: Request) => {
       charCount,
       submitted: body.submit,
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // 2-1. 워크숍 희망일·시작 시간만 수정 — 제출 후에도 열려 있는 유일한 계획서 항목
+  // --------------------------------------------------------------------------
+  if (body.kind === "workshop-pref") {
+    if (!WORKSHOP_PREF_EDITABLE_STATUSES.includes(group.status)) {
+      const message =
+        group.status === "draft"
+          ? "계획서를 제출한 뒤에 이용할 수 있습니다."
+          : "워크숍 희망일을 수정할 수 없는 상태입니다. 수정이 필요하면 AI융합원으로 문의해 주세요.";
+      return jsonResponse({ error: message }, 400);
+    }
+
+    // 조회-갱신 사이에 상태가 바뀌었으면 갱신 건수가 0이 되어 안전하게 실패한다.
+    const { data: updatedPlan, error: prefError } = await supabase
+      .from("study_group_plans")
+      .update({ workshop_pref: body.workshopPref })
+      .eq("group_id", body.groupId)
+      .select("group_id")
+      .maybeSingle();
+
+    if (prefError) {
+      console.error("[study-submit] 워크숍 희망일 저장 실패:", prefError);
+      return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+    }
+    if (!updatedPlan) {
+      return jsonResponse({ error: "제출된 계획서가 없습니다." }, 400);
+    }
+
+    return jsonResponse({ ok: true, groupId: body.groupId, status: group.status });
   }
 
   // --------------------------------------------------------------------------

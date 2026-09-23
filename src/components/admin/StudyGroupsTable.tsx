@@ -6,6 +6,8 @@ import { Modal } from "@/components/ui/Modal";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyGroupEditModal } from "@/components/admin/StudyGroupEditModal";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
+import { WorkshopPrefTable } from "@/components/study/WorkshopPrefTable";
+import { formatWorkshopTimeRange } from "@/lib/workshopPref";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { downloadPdf } from "@/lib/download";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -619,6 +621,15 @@ export function StudyGroupsTable() {
                     </p>
                   </div>
                 ))}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    단계별 워크숍 희망일·시작 시간
+                  </p>
+                  <div className="mt-2">
+                    <WorkshopPrefTable value={detail.plan.workshop_pref ?? {}} readOnly />
+                  </div>
+                </div>
+
                 <p className="text-xs text-slate-400">
                   공백 제외 {detail.plan.char_count.toLocaleString()}자
                   {detail.plan.submitted_at && ` · 제출 ${formatDateTime(detail.plan.submitted_at)}`}
@@ -715,14 +726,30 @@ export function StudyGroupsTable() {
                   <ul className="mt-2 space-y-1 text-sm text-slate-600" role="list">
                     {cells
                       .slice()
-                      .sort((a, b) => b.groups.length - a.groups.length || a.date.localeCompare(b.date))
-                      .map((cell) => (
-                        <li key={`${cell.stepKey}-${cell.date}`}>
-                          · {formatDate(cell.date)} —{" "}
-                          <strong className="tabular-nums text-brand">{cell.groups.length}팀</strong>{" "}
-                          <span className="text-xs text-slate-500">({cell.groups.join(", ")})</span>
-                        </li>
-                      ))}
+                      .sort(
+                        (a, b) =>
+                          b.groups.length - a.groups.length ||
+                          a.date.localeCompare(b.date) ||
+                          a.time.localeCompare(b.time)
+                      )
+                      .map((cell) => {
+                        const range = formatWorkshopTimeRange(cell.time, step.hours);
+                        return (
+                          <li key={`${cell.stepKey}-${cell.date}-${cell.time}`}>
+                            · {formatDate(cell.date)}{" "}
+                            {range ? (
+                              <span className="tabular-nums">{range}</span>
+                            ) : (
+                              <span className="text-xs text-amber-700">(시간 미입력)</span>
+                            )}{" "}
+                            —{" "}
+                            <strong className="tabular-nums text-brand">
+                              {cell.groups.length}팀
+                            </strong>{" "}
+                            <span className="text-xs text-slate-500">({cell.groups.join(", ")})</span>
+                          </li>
+                        );
+                      })}
                   </ul>
                 </div>
               );
