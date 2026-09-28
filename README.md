@@ -39,7 +39,7 @@
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
     `coaching-*`은 팀(대표자 본인확인), `expert-coaching-*`은 전문가(성명+연락처 본인확인 + 배정 확인)가
     코칭 일정을 제안·회신·확정하고 메모를 남기는 경로입니다(`0026`).
-    이 함수만 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
+    연구모임 함수 4개(`study-submit`·`study-lookup`·`study-expert-lookup`·`study-notify`)는 `_shared/cors.ts`를 쓰지 않고 CORS 헬퍼를 파일 안에 복제해 **단일 파일**로 유지합니다 —
     Supabase 대시보드 코드 편집기는 `index.ts` 한 파일만 올리므로 `../_shared/`를 가리키는 import가
     있으면 "Module not found"로 배포가 실패합니다. 운영 담당자가 CLI 없이 대시보드에서 고쳐
     배포할 수 있도록 한 절충이며, `_shared/cors.ts`를 고칠 때는 이 파일도 함께 확인해야 합니다 연구모임 신청은 "모임 1건 + 참여자
@@ -111,8 +111,20 @@ supabase secrets set RESEND_API_KEY=re_xxxxxxxx \
   확인·수정한 뒤 발송합니다. 전문가 신청자에게는 보내지 않습니다.
 
 > `study-submit`을 고쳤다면 **프론트보다 먼저 재배포**하세요. 함수가 옛 버전이면 새 `kind`를 모르기 때문에
-> 화면에서 "입력값을 확인해 주세요."(400)만 돌아옵니다. 이 함수는 `_shared` import가 없는 단일 파일이라
-> Supabase 대시보드의 코드 편집기에 `index.ts`를 그대로 붙여넣어 배포해도 됩니다.
+> 화면에서 "입력값을 확인해 주세요."(400)만 돌아옵니다.
+
+#### CLI 없이 대시보드로 배포하기 (연구모임 함수 4개)
+
+`study-submit`·`study-lookup`·`study-expert-lookup`·`study-notify`는 `_shared` import가 없는 단일 파일이라
+Supabase 대시보드의 **Edge Functions** 코드 편집기로 배포할 수 있습니다.
+
+1. 대시보드 → **Edge Functions** → 이미 있는 함수는 이름을 눌러 코드 편집 화면을, 없는 함수는
+   새 함수 만들기(편집기 방식)를 엽니다. **함수 이름은 폴더명과 정확히 같아야** 합니다.
+2. 저장소의 `supabase/functions/<함수명>/index.ts` 전체를 붙여넣고 배포합니다.
+3. `study-notify`의 발송 시크릿(`RESEND_API_KEY`, `NOTIFY_FROM_EMAIL`, 선택 `NOTIFY_REPLY_TO`)은
+   대시보드 Edge Functions의 **Secrets** 화면에서 등록합니다.
+
+특강 레거시 함수(`lookup`·`issue-certificate`·`cancel-application`)는 `_shared`를 쓰므로 CLI로만 배포됩니다.
 
 ### 3. GitHub Pages 활성화
 1. 저장소 Settings → Pages → Build and deployment → **Source: GitHub Actions** 선택

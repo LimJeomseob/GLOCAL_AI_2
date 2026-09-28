@@ -10,7 +10,31 @@
 //     배정 관계가 확인된 범위에서만 노출한다.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
-import { handleCorsPreflight, jsonResponse } from "../_shared/cors.ts";
+
+// ---------------------------------------------------------------------------
+// CORS 헬퍼 — Supabase 대시보드 코드 편집기로도 배포할 수 있게 파일 안에 둔다.
+// 편집기는 index.ts 한 파일만 올리므로 ../_shared/ import가 있으면 "Module not found"로
+// 실패한다(study-submit·study-notify와 같은 이유). _shared/cors.ts 를 고칠 때 여기도 함께 볼 것.
+// ---------------------------------------------------------------------------
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function handleCorsPreflight(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  return null;
+}
 
 const PHONE_REGEX = /^01[0-9]-?\d{3,4}-?\d{4}$/;
 
