@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
 
   const ids = rows.map((g: { id: string }) => g.id);
 
-  const [plansRes, sessionsRes, memosRes] = await Promise.all([
+  const [plansRes, sessionsRes, memosRes, finalSchedulesRes] = await Promise.all([
     supabase.from("study_group_plans").select("group_id, workshop_pref").in("group_id", ids),
     supabase
       .from("study_coaching_sessions")
@@ -131,6 +131,12 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .in("group_id", ids)
       .order("created_at"),
+    // 팀별 최종 일정 공지(0027) — 대표자 화면(study-lookup)과 같은 공개 행만 보여 준다.
+    supabase
+      .from("study_final_schedules")
+      .select("*")
+      .in("group_id", ids)
+      .eq("published", true),
   ]);
 
   const byGroup = <T extends { group_id: string }>(list: T[] | null) => {
@@ -146,6 +152,31 @@ Deno.serve(async (req: Request) => {
   const plans = byGroup(plansRes.data as { group_id: string; workshop_pref: unknown }[] | null);
   const sessions = byGroup(sessionsRes.data as { group_id: string }[] | null);
   const memos = byGroup(memosRes.data as { group_id: string }[] | null);
+  const finalSchedules = byGroup(finalSchedulesRes.data as { group_id: string }[] | null);
+
+  // 공문의 교육과정 3단계. study-lookup의 FINAL_STEPS와 같아야 한다(단일 파일 배포라 복제).
+  const FINAL_STEPS = [
+    { no: 1, label: "기획" },
+    { no: 2, label: "제작" },
+    { no: 3, label: "환류" },
+  ];
+
+  const toFinalSchedule = (row: any) =>
+    row
+      ? {
+          teamNo: row.team_no,
+          composition: row.composition,
+          expertLabel: row.expert_label,
+          steps: FINAL_STEPS.map((step) => ({
+            no: step.no,
+            label: step.label,
+            when: row[`step${step.no}_when`] ?? "",
+            detail: row[`step${step.no}_detail`] ?? "",
+          })),
+          note: row.note,
+          updatedAt: row.updated_at,
+        }
+      : null;
 
   const payload = rows.map((g: any) => ({
     groupId: g.id,
@@ -165,6 +196,7 @@ Deno.serve(async (req: Request) => {
     progressMethod: g.progress_method,
     educationMode: g.education_mode,
     workshopPref: (plans.get(g.id)?.[0] as any)?.workshop_pref ?? {},
+    finalSchedule: toFinalSchedule(finalSchedules.get(g.id)?.[0] ?? null),
     coachingSessions: (sessions.get(g.id) ?? []).map((s: any) => ({
       id: s.id,
       sessionNo: s.session_no,

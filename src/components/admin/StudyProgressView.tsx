@@ -1,15 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
+import { StudyProgressRowEditor } from "@/components/admin/StudyProgressRowEditor";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
-import { fetchStudyGroups, fetchStudyRounds } from "@/lib/studyAdmin";
+import { fetchStudyExpertApplications, fetchStudyGroups, fetchStudyRounds } from "@/lib/studyAdmin";
 import { STUDY_COACHING_TARGET_COUNT, STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
-import { STUDY_OUTPUT_TYPES, type StudyGroupWithRelations, type StudyRound } from "@/lib/studyTypes";
+import {
+  STUDY_OUTPUT_TYPES,
+  type StudyExpertApplication,
+  type StudyGroupWithRelations,
+  type StudyRound,
+} from "@/lib/studyTypes";
 
 const ALL = "__all__";
 
@@ -20,7 +26,9 @@ const OPERATING = new Set(["selected", "in_progress", "report_submitted", "compl
  * 관리자 탭 C. 연구모임 운영현황.
  *
  * 세 가지를 한 화면에서 처리한다.
- *  1) 팀별 진척 매트릭스 — 미제출 팀을 눈에 띄게 해 독려 대상을 바로 고른다
+ *  1) 팀별 진척 매트릭스 — 미제출 팀을 눈에 띄게 해 독려 대상을 바로 고른다.
+ *     행을 펼치면 전문가 배정과 3단계 일정을 그 자리에서 고친다(StudyProgressRowEditor).
+ *     저장한 값은 대표자 '내 연구모임'·전문가 「배정 팀 확인」이 읽는 같은 데이터다.
  *  2) 산출물 아카이브 — 유형·팀별로 걸러 CSV로 내보내면 성과 자료집 목차가 나온다
  *  3) 이수 확정 명단 — 30만 포인트 지급 대상(참여자 전원)을 CSV로 내보낸다
  */
@@ -31,6 +39,10 @@ export function StudyProgressView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [outputTypeFilter, setOutputTypeFilter] = useState<string>(ALL);
+  /** 배정 후보 — 이 회차에서 선정된 교내 전문가(연구모임 관리 상세 팝업과 같은 기준) */
+  const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -53,12 +65,17 @@ export function StudyProgressView() {
     };
   }, []);
 
-  const load = useCallback(async (id: string) => {
-    setLoading(true);
+  /** silent: 저장 뒤 재조회 — 화면을 "불러오는 중"으로 비우지 않아 펼친 행이 그대로 남는다. */
+  const load = useCallback(async (id: string, { silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const all = await fetchStudyGroups(id);
+      const [all, expertRows] = await Promise.all([
+        fetchStudyGroups(id),
+        fetchStudyExpertApplications(id),
+      ]);
       setGroups(all.filter((g) => OPERATING.has(g.status)));
+      setExperts(expertRows.filter((e) => e.status === "selected"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "운영 현황을 불러오지 못했습니다.");
     } finally {
@@ -141,7 +158,8 @@ export function StudyProgressView() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 운영현황</h1>
           <p className="mt-1 text-sm text-slate-600">
-            선발된 팀의 전문가 배정·코칭 일정·회의록·산출물·결과보고서 진척을 확인합니다.
+            선발된 팀의 전문가 배정·일정·회의록·산출물·결과보고서 진척을 확인합니다. 모임명을 눌러 행을
+            펼치면 전문가 배정과 일정을 수정할 수 있고, 저장하면 대표자·전문가 화면에 바로 반영됩니다.
             {round && ` 결과보고 마감 ${formatDate(round.report_due_at)}`}
           </p>
         </div>
@@ -156,6 +174,12 @@ export function StudyProgressView() {
           </select>
         </label>
       </div>
+
+      {notice && (
+        <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {notice}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -193,68 +217,117 @@ export function StudyProgressView() {
                     const meetingShort = g.meetings.length < STUDY_MEETING_TARGET_COUNT;
                     const reportDone = Boolean(g.report?.submitted_at);
                     const coachingDone = g.coachingSessions.filter((s) => s.status === "확정").length;
+                    const expanded = expandedId === g.id;
+                    // 팀 화면에 보이는 'AI 전문가' 표기(첫 줄)를 우선 — 외부 전문가도 여기서 보인다.
+                    const expertName =
+                      g.finalSchedule?.expert_label?.split("\n")[0]?.trim() || g.expert?.name || "";
                     return (
-                      <tr key={g.id} className="border-b border-slate-100 last:border-b-0">
-                        <td className="px-3 py-3 font-mono text-xs text-slate-600">{g.code}</td>
-                        <td className="px-3 py-3 font-semibold text-slate-800">{g.name}</td>
-                        <td className="px-3 py-3 text-slate-700">{g.leader_name}</td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {g.expert ? (
-                            g.expert.name
-                          ) : (
-                            <span className="text-amber-700">미배정</span>
+                      <Fragment key={g.id}>
+                        <tr
+                          className={clsx(
+                            "border-b border-slate-100",
+                            expanded ? "bg-brand/5" : "last:border-b-0"
                           )}
-                        </td>
-                        <td className="px-3 py-3 font-semibold">
-                          {g.finalSchedule ? (
-                            g.finalSchedule.published ? (
-                              <span className="text-emerald-700">등록</span>
+                        >
+                          <td className="px-3 py-3 font-mono text-xs text-slate-600">{g.code}</td>
+                          <td className="px-3 py-3 font-semibold text-slate-800">
+                            <button
+                              type="button"
+                              className="flex items-start gap-1.5 text-left hover:text-brand"
+                              aria-expanded={expanded}
+                              onClick={() => {
+                                setNotice(null);
+                                setExpandedId(expanded ? null : g.id);
+                              }}
+                            >
+                              <span aria-hidden="true" className="mt-0.5 text-xs text-slate-400">
+                                {expanded ? "▾" : "▸"}
+                              </span>
+                              <span>{g.name}</span>
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 text-slate-700">{g.leader_name}</td>
+                          <td className="px-3 py-3 text-slate-700">
+                            {expertName ? (
+                              <span className="flex flex-wrap items-center gap-1">
+                                {expertName}
+                                {g.expert_id && (
+                                  <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand">
+                                    교내
+                                  </span>
+                                )}
+                              </span>
                             ) : (
-                              <span className="text-slate-500">비공개</span>
-                            )
-                          ) : (
-                            <span className="text-amber-700">미등록</span>
-                          )}
-                        </td>
-                        <td
-                          className={clsx(
-                            "px-3 py-3 text-right font-semibold tabular-nums",
-                            coachingDone < STUDY_COACHING_TARGET_COUNT
-                              ? "text-amber-700"
-                              : "text-emerald-700"
-                          )}
-                        >
-                          {coachingDone}
-                          <span className="ml-0.5 text-xs font-normal text-slate-400">
-                            /{STUDY_COACHING_TARGET_COUNT}
-                          </span>
-                        </td>
-                        <td
-                          className={clsx(
-                            "px-3 py-3 text-right tabular-nums font-semibold",
-                            meetingShort ? "text-amber-700" : "text-emerald-700"
-                          )}
-                        >
-                          {g.meetings.length}
-                          <span className="ml-0.5 text-xs font-normal text-slate-400">
-                            /{STUDY_MEETING_TARGET_COUNT}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-slate-700">
-                          {g.outputs.length}
-                        </td>
-                        <td
-                          className={clsx(
-                            "px-3 py-3 font-semibold",
-                            reportDone ? "text-emerald-700" : "text-amber-700"
-                          )}
-                        >
-                          {reportDone ? "제출" : "미제출"}
-                        </td>
-                        <td className="px-3 py-3">
-                          <StudyStatusBadge status={g.status} />
-                        </td>
-                      </tr>
+                              <span className="text-amber-700">미배정</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 font-semibold">
+                            {g.finalSchedule ? (
+                              g.finalSchedule.published ? (
+                                <span className="text-emerald-700">등록</span>
+                              ) : (
+                                <span className="text-slate-500">비공개</span>
+                              )
+                            ) : (
+                              <span className="text-amber-700">미등록</span>
+                            )}
+                          </td>
+                          <td
+                            className={clsx(
+                              "px-3 py-3 text-right font-semibold tabular-nums",
+                              coachingDone < STUDY_COACHING_TARGET_COUNT
+                                ? "text-amber-700"
+                                : "text-emerald-700"
+                            )}
+                          >
+                            {coachingDone}
+                            <span className="ml-0.5 text-xs font-normal text-slate-400">
+                              /{STUDY_COACHING_TARGET_COUNT}
+                            </span>
+                          </td>
+                          <td
+                            className={clsx(
+                              "px-3 py-3 text-right tabular-nums font-semibold",
+                              meetingShort ? "text-amber-700" : "text-emerald-700"
+                            )}
+                          >
+                            {g.meetings.length}
+                            <span className="ml-0.5 text-xs font-normal text-slate-400">
+                              /{STUDY_MEETING_TARGET_COUNT}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums text-slate-700">
+                            {g.outputs.length}
+                          </td>
+                          <td
+                            className={clsx(
+                              "px-3 py-3 font-semibold",
+                              reportDone ? "text-emerald-700" : "text-amber-700"
+                            )}
+                          >
+                            {reportDone ? "제출" : "미제출"}
+                          </td>
+                          <td className="px-3 py-3">
+                            <StudyStatusBadge status={g.status} />
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="border-b border-slate-200">
+                            <td colSpan={10} className="p-0">
+                              <StudyProgressRowEditor
+                                // 저장 후 재조회된 값으로 입력칸을 다시 채운다.
+                                key={`${g.id}-${g.expert_id ?? ""}-${g.finalSchedule?.updated_at ?? ""}`}
+                                group={g}
+                                experts={experts}
+                                onSaved={async (message) => {
+                                  if (roundId) await load(roundId, { silent: true });
+                                  setNotice(message);
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

@@ -190,6 +190,68 @@ export async function upsertStudyFinalSchedule(
   return toAdminErrorMessage(error);
 }
 
+/** 최종 일정 행을 저장용 입력으로 바꾼다. 없으면 빈 공개 행 — 일부 항목만 고칠 때 나머지를 보존한다. */
+export function toFinalScheduleInput(row: StudyFinalSchedule | null): StudyFinalScheduleInput {
+  return {
+    teamNo: row?.team_no ?? null,
+    composition: row?.composition ?? "",
+    expertLabel: row?.expert_label ?? "",
+    step1When: row?.step1_when ?? "",
+    step1Detail: row?.step1_detail ?? "",
+    step2When: row?.step2_when ?? "",
+    step2Detail: row?.step2_detail ?? "",
+    step3When: row?.step3_when ?? "",
+    step3Detail: row?.step3_detail ?? "",
+    note: row?.note ?? "",
+    published: row?.published ?? true,
+  };
+}
+
+/** 교내 전문가를 팀 화면 'AI 전문가' 표기로 — 확정표 형식(성명 줄바꿈 (소속 직급))을 따른다. */
+export function formatExpertLabel(expert: Pick<StudyExpertApplication, "name" | "affiliation" | "position">): string {
+  const org = [expert.affiliation, expert.position].filter(Boolean).join(" ");
+  return org ? `${expert.name}\n(${org})` : expert.name;
+}
+
+/** 전문가 배정 선택지 — 목록(교내 선정 전문가), 직접 입력(외부 전문가), 해제 */
+export type StudyExpertChoice =
+  | { kind: "listed"; expert: StudyExpertApplication }
+  | { kind: "manual"; label: string }
+  | { kind: "none" };
+
+/**
+ * 전문가 배정 — 관리자 화면 어디서 배정해도 대표자·전문가 화면이 같은 결과를 보게 하는 단일 경로.
+ *
+ * 배정 정보가 두 곳에 있다: 교내 전문가 연결(study_groups.expert_id → 전문가 「배정 팀 확인」)과
+ * 팀 화면의 'AI 전문가' 표기(study_final_schedules.expert_label). 둘을 항상 함께 바꾼다.
+ *  · listed: expert_id 연결 + 표기를 그 전문가로
+ *  · manual: 외부 전문가 — expert_id 해제(이전 교내 전문가 화면에 남지 않게) + 입력한 표기
+ *  · none:   둘 다 해제
+ * 최종 일정 행이 없으면 공개 행으로 새로 만든다(전문가만 먼저 보이고 일정은 "미정").
+ */
+export async function assignStudyGroupExpertWithLabel(
+  group: Pick<StudyGroupWithRelations, "id" | "finalSchedule">,
+  choice: StudyExpertChoice
+): Promise<string | null> {
+  const expertId = choice.kind === "listed" ? choice.expert.id : null;
+  const label =
+    choice.kind === "listed"
+      ? formatExpertLabel(choice.expert)
+      : choice.kind === "manual"
+        ? choice.label.trim()
+        : "";
+
+  const assignError = await assignStudyGroupExpert(group.id, expertId);
+  if (assignError) return `전문가 배정 실패: ${assignError}`;
+
+  // 해제인데 최종 일정 행도 없으면 표기할 곳이 없으므로 만들지 않는다.
+  if (choice.kind === "none" && !group.finalSchedule) return null;
+
+  const input = { ...toFinalScheduleInput(group.finalSchedule), expertLabel: label };
+  const labelError = await upsertStudyFinalSchedule(group.id, input);
+  return labelError ? `AI 전문가 표기 저장 실패: ${labelError}` : null;
+}
+
 /** 최종 일정 공지 행 삭제 — 팀 화면의 섹션이 사라진다. */
 export async function deleteStudyFinalSchedule(groupId: string): Promise<string | null> {
   const supabase = createSupabaseBrowserClient();

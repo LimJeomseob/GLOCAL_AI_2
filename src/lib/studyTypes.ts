@@ -714,6 +714,8 @@ export interface StudyExpertAssignedGroup {
   educationMode: StudyEducationMode | null;
   /** 계획서 5번의 단계별 워크숍 희망일 — 전문가가 일정을 제안할 때 참고한다 */
   workshopPref: WorkshopPreference;
+  /** 팀별 최종 일정·AI 전문가 표기(0027). 관리자가 운영현황에서 고친 값이 그대로 보인다. 미등록·비공개면 null */
+  finalSchedule: StudyLookupFinalSchedule | null;
   coachingSessions: StudyLookupCoachingSession[];
   coachingMemos: StudyLookupCoachingMemo[];
 }
