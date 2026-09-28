@@ -4,7 +4,8 @@ import { useState } from "react";
 import { StudyApplyForm, buildApplyInitialValues } from "@/components/study/StudyApplyForm";
 import { StudyGroupGate } from "@/components/study/StudyGroupGate";
 import { StudyGroupSummary } from "@/components/study/StudyGroupSummary";
-import { canEditStudyApplication, toStudyApplyRoundInfo } from "@/lib/studyApi";
+import { StudyMembersEditForm } from "@/components/study/StudyMembersEditForm";
+import { canEditStudyApplication, canEditStudyMembers, toStudyApplyRoundInfo } from "@/lib/studyApi";
 import type { StudyIdentity, StudyLookupResult } from "@/lib/studyTypes";
 
 /**
@@ -21,10 +22,28 @@ function StudyLookupBody({
   refresh: (nextIdentity?: StudyIdentity) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editingMembers, setEditingMembers] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   // 회차 정보가 없으면 신청 구간을 판정할 수 없으므로 수정을 열지 않는다.
   const canEdit = canEditStudyApplication(group.status) && Boolean(group.round);
+  // 선발 이후에는 신청서 전체가 잠기므로 참여자 명단만 따로 고칠 수 있게 연다.
+  const canEditMembers = canEditStudyMembers(group.status) && Boolean(group.round);
+
+  if (editingMembers && canEditMembers) {
+    return (
+      <StudyMembersEditForm
+        group={group}
+        identity={identity}
+        onSaved={async () => {
+          await refresh();
+          setEditingMembers(false);
+          setNotice("참여자 명단을 수정했습니다.");
+        }}
+        onCancel={() => setEditingMembers(false)}
+      />
+    );
+  }
 
   if (editing && group.round) {
     return (
@@ -55,6 +74,14 @@ function StudyLookupBody({
           ? () => {
               setNotice(null);
               setEditing(true);
+            }
+          : undefined
+      }
+      onEditMembers={
+        canEditMembers
+          ? () => {
+              setNotice(null);
+              setEditingMembers(true);
             }
           : undefined
       }

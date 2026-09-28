@@ -51,6 +51,7 @@ export function StudyGroupSummary({
   identity,
   notice = null,
   onEditApplication,
+  onEditMembers,
 }: {
   group: StudyLookupResult;
   /** 본인확인에 쓴 신원. 조회 응답에 없는 대표자 연락처를 제출본 PDF에 싣기 위해 받는다. */
@@ -59,6 +60,8 @@ export function StudyGroupSummary({
   notice?: string | null;
   /** 주어지면 「신청서 내용」에 수정 버튼을 띄운다. 실제 허용 여부는 이 컴포넌트가 다시 판정한다. */
   onEditApplication?: () => void;
+  /** 주어지면 「참여자」에 수정 버튼을 띄운다(선발 이후 운영 중). 실제 허용 여부는 서버가 다시 판정한다. */
+  onEditMembers?: () => void;
 }) {
   const [pdfBusy, setPdfBusy] = useState<"application" | "plan" | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -445,7 +448,19 @@ export function StudyGroupSummary({
 
       {/* 참여자 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
+          {onEditMembers && (
+            <Button variant="outline" size="sm" onClick={onEditMembers} disabled={pdfBusy !== null}>
+              참여자 수정
+            </Button>
+          )}
+        </div>
+        {onEditMembers && group.members.some((m) => !m.phone || !m.email) && (
+          <p className="mt-2 text-xs text-amber-700">
+            연락처·이메일이 비어 있는 참여자가 있습니다. 「참여자 수정」에서 입력해 주세요.
+          </p>
+        )}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>

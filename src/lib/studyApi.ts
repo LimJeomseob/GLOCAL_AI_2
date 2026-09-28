@@ -378,3 +378,14 @@ export const STUDY_APPLY_EDITABLE_STATUSES: StudyGroupStatus[] = ["draft", "subm
 export function canEditStudyApplication(status: StudyGroupStatus): boolean {
   return STUDY_APPLY_EDITABLE_STATUSES.includes(status);
 }
+
+/**
+ * 참여자 명단만 대표자가 고칠 수 있는 상태 — 선발 이후 운영 중.
+ * 서버(study-submit의 MEMBERS_EDITABLE_STATUSES)와 같은 기준이며, 실제 강제는 서버가 한다.
+ * 심사 착수 전(draft·submitted)에는 신청서 수정 화면에서 참여자까지 함께 고친다.
+ */
+export const STUDY_MEMBERS_EDITABLE_STATUSES: StudyGroupStatus[] = ["selected", "in_progress"];
+
+export function canEditStudyMembers(status: StudyGroupStatus): boolean {
+  return STUDY_MEMBERS_EDITABLE_STATUSES.includes(status);
+}
