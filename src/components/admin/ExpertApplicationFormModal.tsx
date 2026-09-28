@@ -274,7 +274,11 @@ export function ExpertApplicationFormModal({
                 </select>
               )}
             </FormField>
-            <FormField label="상태" error={errors.status}>
+            <FormField
+              label="상태"
+              error={errors.status}
+              hint="운영현황에서 팀에 배정하면 자동으로 '선정'이 되어 「배정 팀 확인」을 쓸 수 있습니다."
+            >
               {(inputProps) => (
                 <select
                   {...inputProps}

@@ -42,7 +42,7 @@ export function StudyProgressRowEditor({
   onOpenScheduleDetail,
 }: {
   group: StudyGroupWithRelations;
-  /** 배정 후보 — 이 회차에서 선정된 교내 전문가 */
+  /** 배정 후보 — 이 회차 등록 전문가(미선정·취소 제외) */
   experts: StudyExpertApplication[];
   /** 저장 성공 후 목록을 다시 읽는다. message는 상단 안내 문구. */
   onSaved: (message: string) => Promise<void>;
@@ -196,7 +196,7 @@ export function StudyProgressRowEditor({
           )}
           {group.expert && (
             <p className="mt-2 text-xs text-slate-500">
-              교내 전문가 연락처: {group.expert.phone} · {group.expert.email}
+              배정 전문가 연락처: {group.expert.phone} · {group.expert.email}
             </p>
           )}
         </section>

@@ -15,7 +15,7 @@ import {
   fetchStudyRounds,
   updateStudyExpertApplication,
 } from "@/lib/studyAdmin";
-import { STUDY_EXPERT_HEADCOUNT } from "@/lib/studyGroupConstants";
+import { STUDY_COACHING_TARGET_COUNT, STUDY_EXPERT_HEADCOUNT } from "@/lib/studyGroupConstants";
 import {
   STUDY_EXPERT_STATUSES,
   STUDY_EXPERT_STATUS_LABELS,
@@ -256,7 +256,7 @@ export function ExpertApplicantsTable() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">전문가 신청자</h1>
           <p className="mt-1 text-sm text-slate-600">
-            교내 AI활용 전문가(연구모임 코칭 강사) 신청 접수·선정. 모집 {STUDY_EXPERT_HEADCOUNT}명 내외 ·{" "}
+            AI활용 전문가(연구모임 코칭 강사) 신청 접수·선정. 외부 전문가도 「신청자 추가」로 여기 등록해야 팀에 배정할 수 있습니다. 모집 {STUDY_EXPERT_HEADCOUNT}명 내외 ·{" "}
             <strong className="text-slate-800">현재 선정 {selectedCount}명</strong> / 접수 {rows.length}명
           </p>
           {round && (
@@ -499,20 +499,30 @@ export function ExpertApplicantsTable() {
             <h3 className="mt-5 text-sm font-bold text-slate-800">배정된 연구모임</h3>
             {assignedGroups.length === 0 ? (
               <p className="mt-2 text-sm text-slate-500">
-                배정된 연구모임이 없습니다. 배정은 「연구모임 관리」 탭의 상세 팝업에서 합니다.
+                배정된 연구모임이 없습니다. 배정은 「연구모임 운영현황」에서 모임 행을 펼쳐 &apos;AI 전문가
+                배정&apos; 드롭다운으로 합니다(배정하면 자동으로 선정).
               </p>
             ) : (
-              <ul className="mt-2 flex flex-col gap-1 text-sm text-slate-700" role="list">
-                {assignedGroups.map((g) => (
-                  <li key={g.id}>
-                    · <span className="font-mono text-xs text-slate-500">{g.code}</span> {g.name}
-                    <span className="ml-2 text-xs text-slate-500">
-                      대표자 {g.leader_name} · 코칭 확정{" "}
-                      {g.coachingSessions.filter((s) => s.status === "확정").length}/3
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {detail.status !== "selected" && (
+                  <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    배정된 팀이 있지만 상태가 &quot;{STUDY_EXPERT_STATUS_LABELS[detail.status]}&quot;라 이 전문가는
+                    「배정 팀 확인」에서 조회할 수 없습니다. 상태를 &quot;선정&quot;으로 바꿔 주세요.
+                  </p>
+                )}
+                <ul className="mt-2 flex flex-col gap-1 text-sm text-slate-700" role="list">
+                  {assignedGroups.map((g) => (
+                    <li key={g.id}>
+                      · <span className="font-mono text-xs text-slate-500">{g.code}</span> {g.name}
+                      <span className="ml-2 text-xs text-slate-500">
+                        대표자 {g.leader_name} · 코칭 확정{" "}
+                        {g.coachingSessions.filter((s) => s.status === "확정").length}/
+                        {STUDY_COACHING_TARGET_COUNT}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
 
             <h3 className="mt-5 text-sm font-bold text-slate-800">관리자 메모</h3>

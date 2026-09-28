@@ -207,50 +207,71 @@ export function toFinalScheduleInput(row: StudyFinalSchedule | null): StudyFinal
   };
 }
 
-/** 교내 전문가를 팀 화면 'AI 전문가' 표기로 — 확정표 형식(성명 줄바꿈 (소속 직급))을 따른다. */
+/** 등록 전문가를 팀 화면 'AI 전문가' 표기로 — 확정표 형식(성명 줄바꿈 (소속 직급))을 따른다. */
 export function formatExpertLabel(expert: Pick<StudyExpertApplication, "name" | "affiliation" | "position">): string {
   const org = [expert.affiliation, expert.position].filter(Boolean).join(" ");
   return org ? `${expert.name}\n(${org})` : expert.name;
 }
 
+/** 전문가 없이 진행하는 팀의 표기(0028 확정표 원문과 같다) */
+export const STUDY_INDIVIDUAL_LEARNING_LABEL = "개별 학습";
+
 /**
- * 관리자 화면(연구모임 관리·운영현황)이 공통으로 쓰는 '배정 전문가' 표시값.
- * 팀 화면에 보이는 'AI 전문가' 표기(첫 줄)를 우선 — 외부 전문가도 보인다. internal은 교내 연결 여부.
+ * 배정 후보 — 「전문가 신청자」에 등록된 전문가 중 미선정·취소를 뺀 전원(접수 포함, 외부 전문가도 여기 등록한다).
+ * 운영현황 드롭다운과 전문가 신청자 탭이 같은 기준을 쓴다. 배정하면 선정으로 바뀐다.
+ */
+export function isStudyExpertCandidate(expert: Pick<StudyExpertApplication, "status">): boolean {
+  return expert.status !== "rejected" && expert.status !== "cancelled";
+}
+
+/**
+ * 관리자 화면이 공통으로 쓰는 '배정 전문가' 표시값.
+ * 팀 화면에 보이는 'AI 전문가' 표기(첫 줄)를 우선한다.
+ *  · linked: 등록 전문가와 연결됨(expert_id) — 그 전문가의 「배정 팀 확인」에 팀이 나타난다
+ *  · individual: '개별 학습' 팀 — 전문가가 없으니 연결도 필요 없다
+ *  · 표기만 있고 둘 다 아니면 예전 자유 텍스트 배정 → 드롭다운에서 다시 골라야 「배정 팀 확인」이 열린다
  */
 export function studyGroupExpertDisplay(
   group: Pick<StudyGroupWithRelations, "expert_id" | "expert" | "finalSchedule">
-): { name: string; internal: boolean } {
+): { name: string; linked: boolean; individual: boolean } {
   const name =
     group.finalSchedule?.expert_label?.split("\n")[0]?.trim() || group.expert?.name || "";
-  return { name, internal: Boolean(group.expert_id) };
+  const linked = Boolean(group.expert_id);
+  return { name, linked, individual: !linked && name === STUDY_INDIVIDUAL_LEARNING_LABEL };
 }
 
-/** 전문가 배정 선택지 — 목록(교내 선정 전문가), 직접 입력(외부 전문가), 해제 */
+/** 전문가 배정 선택지 — 등록 전문가 목록에서 선택, 개별 학습, 해제. 자유 텍스트 입력은 두지 않는다. */
 export type StudyExpertChoice =
   | { kind: "listed"; expert: StudyExpertApplication }
-  | { kind: "manual"; label: string }
+  | { kind: "individual" }
   | { kind: "none" };
 
 /**
- * 전문가 배정 — 관리자 화면 어디서 배정해도 대표자·전문가 화면이 같은 결과를 보게 하는 단일 경로.
+ * 전문가 배정 — 관리자가 드롭다운에서 고른 값을 저장하는 단일 경로.
  *
- * 배정 정보가 두 곳에 있다: 교내 전문가 연결(study_groups.expert_id → 전문가 「배정 팀 확인」)과
+ * 배정 정보가 두 곳에 있다: 전문가 연결(study_groups.expert_id → 전문가 「배정 팀 확인」)과
  * 팀 화면의 'AI 전문가' 표기(study_final_schedules.expert_label). 둘을 항상 함께 바꾼다.
- *  · listed: expert_id 연결 + 표기를 그 전문가로
- *  · manual: 외부 전문가 — expert_id 해제(이전 교내 전문가 화면에 남지 않게) + 입력한 표기
- *  · none:   둘 다 해제
+ *  · listed:     선정이 아니면 선정으로 바꾸고(배정 = 선정 — 「배정 팀 확인」은 선정 전문가만 연다)
+ *                expert_id 연결 + 표기를 그 전문가로
+ *  · individual: expert_id 해제 + 표기 '개별 학습'
+ *  · none:       둘 다 해제
  * 최종 일정 행이 없으면 공개 행으로 새로 만든다(전문가만 먼저 보이고 일정은 "미정").
  */
 export async function assignStudyGroupExpertWithLabel(
   group: Pick<StudyGroupWithRelations, "id" | "finalSchedule">,
   choice: StudyExpertChoice
 ): Promise<string | null> {
+  if (choice.kind === "listed" && choice.expert.status !== "selected") {
+    const statusError = await updateStudyExpertApplication(choice.expert.id, { status: "selected" });
+    if (statusError) return `전문가 선정 처리 실패: ${statusError}`;
+  }
+
   const expertId = choice.kind === "listed" ? choice.expert.id : null;
   const label =
     choice.kind === "listed"
       ? formatExpertLabel(choice.expert)
-      : choice.kind === "manual"
-        ? choice.label.trim()
+      : choice.kind === "individual"
+        ? STUDY_INDIVIDUAL_LEARNING_LABEL
         : "";
 
   const assignError = await assignStudyGroupExpert(group.id, expertId);

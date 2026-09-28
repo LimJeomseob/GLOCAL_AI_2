@@ -12,6 +12,7 @@ import {
   fetchStudyExpertApplications,
   fetchStudyGroups,
   fetchStudyRounds,
+  isStudyExpertCandidate,
   studyGroupExpertDisplay,
   updateStudyGroupStatus,
 } from "@/lib/studyAdmin";
@@ -57,7 +58,7 @@ export function StudyProgressView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [outputTypeFilter, setOutputTypeFilter] = useState<string>(ALL);
-  /** 배정 후보 — 이 회차에서 선정된 교내 전문가(연구모임 관리 상세 팝업과 같은 기준) */
+  /** 배정 후보 — 이 회차 등록 전문가(외부 포함, 미선정·취소 제외). 배정하면 선정으로 바뀐다. */
   const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   /** 「일정 상세 입력」 대상 — 팀 구성·비고·공개 여부까지 포함한 최종 일정 전체 폼 */
@@ -96,7 +97,7 @@ export function StudyProgressView() {
         fetchStudyExpertApplications(id),
       ]);
       setGroups(all.filter((g) => STUDY_OPERATING_STATUSES.has(g.status)));
-      setExperts(expertRows.filter((e) => e.status === "selected"));
+      setExperts(expertRows.filter(isStudyExpertCandidate));
     } catch (e) {
       setError(e instanceof Error ? e.message : "운영 현황을 불러오지 못했습니다.");
     } finally {
@@ -143,7 +144,13 @@ export function StudyProgressView() {
         { header: "진행방법", accessor: (g) => g.progress_method ?? "" },
         { header: "교육형태", accessor: (g) => g.education_mode ?? "" },
         { header: "배정전문가", accessor: (g) => studyGroupExpertDisplay(g).name },
-        { header: "교내전문가", accessor: (g) => (g.expert_id ? "Y" : "N") },
+        {
+          header: "배정팀확인",
+          accessor: (g) => {
+            const d = studyGroupExpertDisplay(g);
+            return d.linked ? "가능" : d.individual || !d.name ? "-" : "불가(미연결)";
+          },
+        },
         {
           header: "최종일정",
           accessor: (g) =>
@@ -235,7 +242,9 @@ export function StudyProgressView() {
           <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 운영현황</h1>
           <p className="mt-1 text-sm text-slate-600">
             선발된 팀의 전문가 배정·일정·코칭·회의록·산출물·결과보고서 진척과 상태를 관리합니다. 모임명을
-            눌러 행을 펼치면 전문가 배정과 일정을 수정할 수 있고, 저장하면 대표자·전문가 화면에 바로 반영됩니다.
+            눌러 행을 펼치면 「전문가 신청자」에 등록된 전문가를 드롭다운에서 배정하고 일정을 수정할 수 있으며,
+            저장하면 대표자 화면과 전문가 「배정 팀 확인」에 바로 반영됩니다. &quot;미연결&quot; 팀은 전문가가
+            조회할 수 없으니 다시 배정해 주세요.
             {round && ` 결과보고 마감 ${formatDate(round.report_due_at)}`}
           </p>
         </div>
@@ -300,7 +309,7 @@ export function StudyProgressView() {
                     const coachingDone = g.coachingSessions.filter((s) => s.status === "확정").length;
                     const expanded = expandedId === g.id;
                     // 연구모임 관리 목록과 같은 기준 — 팀 화면 'AI 전문가' 표기 우선
-                    const { name: expertName, internal } = studyGroupExpertDisplay(g);
+                    const { name: expertName, linked, individual } = studyGroupExpertDisplay(g);
                     return (
                       <Fragment key={g.id}>
                         <tr
@@ -331,10 +340,19 @@ export function StudyProgressView() {
                             {expertName ? (
                               <span className="flex flex-wrap items-center gap-1">
                                 {expertName}
-                                {internal && (
+                                {linked ? (
                                   <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand">
-                                    교내
+                                    등록
                                   </span>
+                                ) : (
+                                  !individual && (
+                                    <span
+                                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                                      title="등록 전문가와 연결되지 않아 「배정 팀 확인」에서 조회되지 않습니다. 행을 펼쳐 드롭다운에서 다시 선택하세요."
+                                    >
+                                      미연결
+                                    </span>
+                                  )
                                 )}
                               </span>
                             ) : (
