@@ -123,7 +123,7 @@ export function StudyMembersEditForm({
       };
     });
 
-    const { error: submitError } = await submitStudy(
+    const { data, error: submitError } = await submitStudy<{ leaderName?: string; leaderPhone?: string }>(
       {
         kind: "members-edit",
         groupId: group.groupId,
@@ -139,7 +139,13 @@ export function StudyMembersEditForm({
       setError(submitError);
       return;
     }
-    await onSaved({ leaderName: leaderPayload.name, leaderPhone: leaderPayload.phone });
+    // 서버가 대표자 수정을 반영했을 때만 새 신원으로 다시 조회한다. 옛 함수는 leader를 무시하고
+    // leaderName/leaderPhone을 돌려주지 않으므로, 그때는 기존 신원을 유지해야 조회가 끊기지 않는다.
+    await onSaved(
+      data?.leaderName && data?.leaderPhone
+        ? { leaderName: data.leaderName, leaderPhone: data.leaderPhone }
+        : identity
+    );
   }
 
   return (
