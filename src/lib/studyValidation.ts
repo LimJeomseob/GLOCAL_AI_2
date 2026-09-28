@@ -273,6 +273,21 @@ export const studyFinalScheduleSchema = z.object({
 
 export type StudyFinalScheduleInput = z.infer<typeof studyFinalScheduleSchema>;
 
+/**
+ * 팀(대표자)이 '내 연구모임'에서 고치는 범위 — 3단계 일시·세부내용만.
+ * 팀 구성·AI 전문가·공개 여부는 AI융합원 관리 항목이라 뺀다(서버 final-schedule-save와 같은 범위).
+ */
+export const studyFinalScheduleTeamSchema = studyFinalScheduleSchema.pick({
+  step1When: true,
+  step1Detail: true,
+  step2When: true,
+  step2Detail: true,
+  step3When: true,
+  step3Detail: true,
+});
+
+export type StudyFinalScheduleTeamInput = z.infer<typeof studyFinalScheduleTeamSchema>;
+
 /** 전문가 본인확인(성명 + 연락처) — 배정 팀 조회 게이트 */
 export const studyExpertIdentitySchema = z.object({
   expertName: z.string().trim().min(1, "성명을 입력해 주세요."),
