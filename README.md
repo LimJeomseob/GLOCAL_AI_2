@@ -159,11 +159,10 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
 ## 폴더 구조 메모
 
 - `src/app/(study)` — 공개 탭. 라우트가 곧 루트입니다:
-  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/coaching`(코칭 일정 조율) · `/report` · `/lookup` ·
+  `/`(사업안내) · `/apply` · `/plan` · `/meetings` · `/report` · `/lookup` ·
   `/expert-apply`(교내 AI활용 전문가 신청) · `/expert-teams`(전문가의 배정 팀 확인)
-  - 코칭 일정은 팀이 제안 → 전문가가 가능/불가 회신 → 어느 한쪽이 확정하는 흐름입니다. 회차(기획·제작·환류)마다
-    제안이 여러 건 쌓일 수 있고 확정은 1건만 남습니다(DB 부분 유니크). 팀·전문가 화면은 같은 패널
-    (`CoachingSchedulePanel`)을 씁니다.
+  - 팀의 「코칭 일정」 탭(`/coaching`)은 삭제했습니다. 팀은 「내 연구모임」의 **팀별 최종 일정**(`0027`)으로 일정을
+    확인·수정합니다. 전문가 화면(`/expert-teams`)의 코칭 조율 패널(`CoachingSchedulePanel`)과 DB(`0026`)는 그대로 둡니다.
 - `src/app/admin` — 관리자 포털(구글 OAuth 로그인 + 연구모임 관리 · 계획서 심사 · 운영현황 · 전문가 신청자 ·
   참여이력 관리 · 안내 발송 + 특강 레거시 탭인 신청자 관리 · 만족도 설문결과)
   - 공개 수정 경로(`study-submit`)는 신청 마감·심사 착수 전까지만 열리므로, 그 뒤의 정정은 관리자 화면에서
