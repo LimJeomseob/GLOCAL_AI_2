@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/format";
 import {
   deleteStudyExpertApplications,
   fetchStudyExpertApplications,
+  fetchStudyGroups,
   fetchStudyRounds,
   updateStudyExpertApplication,
 } from "@/lib/studyAdmin";
@@ -20,6 +21,7 @@ import {
   STUDY_EXPERT_STATUS_LABELS,
   type StudyExpertApplication,
   type StudyExpertStatus,
+  type StudyGroupWithRelations,
   type StudyRound,
 } from "@/lib/studyTypes";
 
@@ -50,6 +52,8 @@ export function ExpertApplicantsTable() {
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 배정 현황 역조회용 — study_groups.expert_id가 정본이다(0026). */
+  const [groups, setGroups] = useState<StudyGroupWithRelations[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -81,7 +85,13 @@ export function ExpertApplicantsTable() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await fetchStudyExpertApplications(id));
+      // 배정 현황은 study_groups.expert_id가 정본이므로 팀 목록에서 역조회한다(0026).
+      const [expertRows, groupRows] = await Promise.all([
+        fetchStudyExpertApplications(id),
+        fetchStudyGroups(id),
+      ]);
+      setRows(expertRows);
+      setGroups(groupRows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "전문가 신청을 불러오지 못했습니다.");
     } finally {
@@ -111,6 +121,10 @@ export function ExpertApplicantsTable() {
 
   const selectedCount = rows.filter((r) => r.status === "selected").length;
   const detail = rows.find((r) => r.id === detailId) ?? null;
+  const assignedGroups = useMemo(
+    () => (detail ? groups.filter((g) => g.expert_id === detail.id) : []),
+    [groups, detail]
+  );
   const editTarget = rows.find((r) => r.id === editId) ?? null;
 
   /**
@@ -482,8 +496,27 @@ export function ExpertApplicantsTable() {
               {detail.experience}
             </p>
 
+            <h3 className="mt-5 text-sm font-bold text-slate-800">배정된 연구모임</h3>
+            {assignedGroups.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                배정된 연구모임이 없습니다. 배정은 「연구모임 관리」 탭의 상세 팝업에서 합니다.
+              </p>
+            ) : (
+              <ul className="mt-2 flex flex-col gap-1 text-sm text-slate-700" role="list">
+                {assignedGroups.map((g) => (
+                  <li key={g.id}>
+                    · <span className="font-mono text-xs text-slate-500">{g.code}</span> {g.name}
+                    <span className="ml-2 text-xs text-slate-500">
+                      대표자 {g.leader_name} · 코칭 확정{" "}
+                      {g.coachingSessions.filter((s) => s.status === "확정").length}/3
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <h3 className="mt-5 text-sm font-bold text-slate-800">관리자 메모</h3>
-            <p className="mt-1 text-xs text-slate-500">배정 연구모임, 연락 결과 등. 신청자에게는 보이지 않습니다.</p>
+            <p className="mt-1 text-xs text-slate-500">연락 결과 등. 신청자에게는 보이지 않습니다.</p>
             <textarea
               rows={3}
               className={`${inputBaseClass} mt-2 resize-y`}

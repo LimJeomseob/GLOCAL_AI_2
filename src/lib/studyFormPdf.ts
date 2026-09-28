@@ -57,7 +57,15 @@ export interface StudyFormPdfData {
   hasNontenured: boolean;
   progressMethod: string | null;
   educationMode: string | null;
-  members: { idNumber: string; name: string; affiliation: string; position: string; isLeader: boolean }[];
+  members: {
+    idNumber: string;
+    name: string;
+    affiliation: string;
+    position: string;
+    phone: string;
+    email: string;
+    isLeader: boolean;
+  }[];
   /** 신청자 조회 응답에는 없으므로 관리자 경로에서만 채워진다. */
   ethicsPledges?: { no: number; title: string; pledge: string }[];
   plan: {
@@ -103,6 +111,8 @@ export function adminGroupToPdfData(g: StudyGroupWithRelations): StudyFormPdfDat
         name: m.name,
         affiliation: m.affiliation,
         position: m.position,
+        phone: m.phone ? formatPhone(m.phone) : "",
+        email: m.email ?? "",
         isLeader: m.is_leader,
       })),
     ethicsPledges: g.ethics_pledges ?? [],
@@ -153,6 +163,8 @@ export function lookupGroupToPdfData(g: StudyLookupResult, identity?: StudyIdent
         name: m.name,
         affiliation: m.affiliation,
         position: m.position,
+        phone: m.phone ? formatPhone(m.phone) : "",
+        email: m.email ?? "",
         isLeader: m.isLeader,
       })),
     plan: g.plan
@@ -560,17 +572,21 @@ function memberRows(data: StudyFormPdfData): string[][] {
     m.name,
     m.affiliation,
     m.position,
+    m.phone || "–",
+    m.email || "–",
     m.isLeader ? "대표자" : "",
   ]);
 }
 
 const MEMBER_COLUMNS: GridColumn[] = [
-  { header: "연번", ratio: 0.08, align: "center" },
-  { header: "직(학)번", ratio: 0.17, align: "center" },
-  { header: "성명", ratio: 0.15, align: "center" },
-  { header: "소속", ratio: 0.34 },
-  { header: "직급", ratio: 0.14, align: "center" },
-  { header: "비고", ratio: 0.12, align: "center" },
+  { header: "연번", ratio: 0.06, align: "center" },
+  { header: "직(학)번", ratio: 0.12, align: "center" },
+  { header: "성명", ratio: 0.1, align: "center" },
+  { header: "소속", ratio: 0.22 },
+  { header: "직급", ratio: 0.1, align: "center" },
+  { header: "연락처", ratio: 0.15, align: "center" },
+  { header: "이메일", ratio: 0.18 },
+  { header: "비고", ratio: 0.07, align: "center" },
 ];
 
 // ---------------------------------------------------------------------------

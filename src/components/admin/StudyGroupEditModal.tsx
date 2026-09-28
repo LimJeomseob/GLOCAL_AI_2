@@ -9,6 +9,7 @@ import {
   countChars,
   isMultiDepartment,
   studyGroupAdminSchema,
+  studyMemberAdminSchema,
   studyPlanAdminSchema,
   studyEthicsPledgeSchema,
   validateMembers,
@@ -61,6 +62,8 @@ const EMPTY_MEMBER: StudyMemberInput = {
   name: "",
   affiliation: "",
   position: "",
+  phone: "",
+  email: "",
   isLeader: false,
 };
 
@@ -91,6 +94,8 @@ function initialMembers(group: StudyGroupWithRelations): StudyMemberInput[] {
       name: m.name,
       affiliation: m.affiliation,
       position: m.position,
+      phone: m.phone ?? "",
+      email: m.email ?? "",
       isLeader: false,
     }));
 }
@@ -150,6 +155,8 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
     name: form.leaderName,
     affiliation: form.leaderAffiliation,
     position: form.leaderPosition,
+    phone: form.leaderPhone,
+    email: form.leaderEmail,
     isLeader: true,
   };
   const allMembers = [leaderRow, ...members];
@@ -185,6 +192,7 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
   /**
    * 저장 전 검증. 인원 상·하한만 경고로 처리하고 나머지(빈 칸·직번 중복)는 막는다 —
    * validateMembers는 인원 검사를 먼저 반환하므로 상·하한을 풀어서 호출한다.
+   * 참여자 연락처·이메일은 도입(0025) 전 접수분이 빈 값이라 관리자 규칙(빈 값 허용)으로 검사한다.
    */
   function validate(): { pledges: StudyEthicsPledgeRecord[] } | null {
     setSaveError(null);
@@ -204,7 +212,12 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
     }
     setErrors(nextErrors);
 
-    const memberMessage = validateMembers(allMembers, 1, Number.MAX_SAFE_INTEGER);
+    const memberMessage = validateMembers(
+      allMembers,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      studyMemberAdminSchema
+    );
     setMemberError(memberMessage);
 
     const nextPledgeErrors: Record<number, string> = {};
@@ -523,7 +536,7 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
             {members.map((member, index) => (
               <div
                 key={index}
-                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
+                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-3"
               >
                 <FormField label={`직번 ${index + 2}`}>
                   {(inputProps) => (
@@ -569,7 +582,31 @@ export function StudyGroupEditModal({ group, round, onClose, onSaved }: StudyGro
                     />
                   )}
                 </FormField>
-                <div className="flex items-end">
+                <FormField label="연락처" hint="도입 전 접수분은 비어 있을 수 있습니다.">
+                  {(inputProps) => (
+                    <input
+                      {...inputProps}
+                      type="tel"
+                      className={inputBaseClass}
+                      value={member.phone}
+                      placeholder="010-1234-5678"
+                      onChange={(e) => updateMember(index, "phone", formatPhoneInput(e.target.value))}
+                    />
+                  )}
+                </FormField>
+                <FormField label="이메일">
+                  {(inputProps) => (
+                    <input
+                      {...inputProps}
+                      type="email"
+                      className={inputBaseClass}
+                      value={member.email}
+                      placeholder="example@gnu.ac.kr"
+                      onChange={(e) => updateMember(index, "email", e.target.value)}
+                    />
+                  )}
+                </FormField>
+                <div className="flex justify-end sm:col-span-3">
                   <Button
                     type="button"
                     variant="ghost"

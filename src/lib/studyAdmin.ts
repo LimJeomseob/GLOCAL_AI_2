@@ -3,9 +3,12 @@
 import { createSupabaseBrowserClient } from "./supabase/client";
 import { TABLES } from "./db-tables";
 import { extractFunctionError } from "./functionError";
+import { formatPhone } from "./format";
 import { countChars } from "./studyValidation";
 import type { StudyMemberInput, StudyPlanAdminInput } from "./studyValidation";
 import type {
+  StudyCoachingMemo,
+  StudyCoachingSession,
   StudyEthicsPledgeRecord,
   StudyExpertApplication,
   StudyExpertStatus,
@@ -82,7 +85,11 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
 
   const ids = rows.map((g) => g.id);
 
-  const [members, plans, reports, meetings, outputs] = await Promise.all([
+  const expertIds = Array.from(
+    new Set(rows.map((g) => g.expert_id).filter((v): v is string => Boolean(v)))
+  );
+
+  const [members, plans, reports, meetings, outputs, sessions, memos, experts] = await Promise.all([
     supabase.from(TABLES.STUDY_GROUP_MEMBERS).select("*").in("group_id", ids).order("sort_order"),
     supabase.from(TABLES.STUDY_GROUP_PLANS).select("*").in("group_id", ids),
     supabase.from(TABLES.STUDY_REPORTS).select("*").in("group_id", ids),
@@ -92,6 +99,16 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
       .in("group_id", ids)
       .order("met_at", { ascending: false }),
     supabase.from(TABLES.STUDY_OUTPUTS).select("*").in("group_id", ids).order("sort_order"),
+    supabase
+      .from(TABLES.STUDY_COACHING_SESSIONS)
+      .select("*")
+      .in("group_id", ids)
+      .order("session_no")
+      .order("created_at"),
+    supabase.from(TABLES.STUDY_COACHING_MEMOS).select("*").in("group_id", ids).order("created_at"),
+    expertIds.length > 0
+      ? supabase.from(TABLES.STUDY_EXPERT_APPLICATIONS).select("*").in("id", expertIds)
+      : Promise.resolve({ data: [] as StudyExpertApplication[] }),
   ]);
 
   const group = <T extends { group_id: string }>(list: T[] | null) => {
@@ -109,6 +126,11 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
   const reportsBy = group(reports.data as StudyReport[] | null);
   const meetingsBy = group(meetings.data as StudyGroupWithRelations["meetings"] | null);
   const outputsBy = group(outputs.data as StudyOutput[] | null);
+  const sessionsBy = group(sessions.data as StudyCoachingSession[] | null);
+  const memosBy = group(memos.data as StudyCoachingMemo[] | null);
+  const expertsBy = new Map(
+    ((experts.data ?? []) as StudyExpertApplication[]).map((e) => [e.id, e])
+  );
 
   return rows.map((g) => ({
     ...g,
@@ -117,7 +139,30 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
     report: reportsBy.get(g.id)?.[0] ?? null,
     meetings: meetingsBy.get(g.id) ?? [],
     outputs: outputsBy.get(g.id) ?? [],
+    expert: (g.expert_id ? expertsBy.get(g.expert_id) : null) ?? null,
+    coachingSessions: sessionsBy.get(g.id) ?? [],
+    coachingMemos: memosBy.get(g.id) ?? [],
   }));
+}
+
+/**
+ * 팀에 전문가를 배정한다(0026). expertId가 null이면 배정을 푼다.
+ * 배정은 관리자만 한다 — 전문가는 배정 결과를 조회만 하고, 팀은 배정된 전문가와 일정만 잡는다.
+ */
+export async function assignStudyGroupExpert(
+  groupId: string,
+  expertId: string | null
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_GROUPS)
+    .update({
+      expert_id: expertId,
+      expert_assigned_at: expertId ? new Date().toISOString() : null,
+    })
+    .eq("id", groupId);
+
+  return toAdminErrorMessage(error);
 }
 
 /** 심사 목록. 심사위원은 RLS에 의해 자기 행만 돌아온다. */
@@ -303,6 +348,9 @@ export async function replaceStudyGroupMembers(
     name: member.name.trim(),
     affiliation: member.affiliation.trim(),
     position: member.position.trim(),
+    // 공개 경로(phoneSchema)와 같은 010-####-#### 저장 형식. 빈 값(도입 전 접수분)은 그대로 둔다.
+    phone: member.phone.trim() === "" ? "" : formatPhone(member.phone.trim()),
+    email: member.email.trim(),
     is_leader: member.isLeader,
     sort_order: index,
   }));

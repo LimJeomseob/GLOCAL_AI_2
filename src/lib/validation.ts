@@ -43,6 +43,18 @@ export const optionalEmailSchema = z
   });
 
 /**
+ * 관리자 복구용 연락처 규칙 — 빈 값을 허용하되, 값이 있으면 phoneSchema와 같은 형식·정규화를 거친다.
+ * 연구모임 참여자 연락처 도입(0025) 전 접수분은 빈 값이라 관리자가 연락처 없이도 저장할 수 있어야 한다.
+ */
+export const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || PHONE_REGEX.test(value), {
+    message: "휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)",
+  })
+  .transform((v) => (v === "" ? "" : formatPhone(v)));
+
+/**
  * 관리자 페이지의 참여자 추가용 스키마. 공개 신청 스키마를 그대로 상속하되 이메일만 선택 입력으로 바꾼다.
  * consent(z.literal(true))는 유지한다 — DB에 `check (consent = true)`가 걸려 있어 등록 시 반드시 true여야 하며,
  * 화면에서는 관리자가 오프라인으로 동의를 받았음을 확인하는 체크박스로 처리한다.

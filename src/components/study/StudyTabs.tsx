@@ -14,10 +14,12 @@ const STUDY_TABS = [
   { href: "/apply", label: "연구모임 신청" },
   { href: "/plan", label: "연구계획서" },
   { href: "/meetings", label: "회의록" },
+  { href: "/coaching", label: "코칭 일정" },
   { href: "/report", label: "결과보고서" },
   { href: "/lookup", label: "내 연구모임" },
   // 연구모임 5단계 흐름과 별개인 교원 대상 모집(코칭 전문가)이라 흐름을 끊지 않도록 맨 뒤에 둔다.
   { href: "/expert-apply", label: "전문가 신청" },
+  { href: "/expert-teams", label: "배정 팀 확인" },
 ];
 
 export function StudyTabs() {

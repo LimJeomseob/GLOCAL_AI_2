@@ -182,6 +182,79 @@ export interface StudyExpertApplication {
   updated_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// 코칭 일정 조율 (study_coaching_sessions / study_coaching_memos, 0026)
+// ---------------------------------------------------------------------------
+
+/** 제안 → 가능|불가 → 확정. '불가'가 된 제안도 이력으로 남는다. */
+export type StudyCoachingStatus = "제안" | "가능" | "불가" | "확정";
+
+export const STUDY_COACHING_STATUSES: StudyCoachingStatus[] = ["제안", "가능", "불가", "확정"];
+
+/** 제안·메모를 올린 주체. 팀·전문가 어느 쪽도 먼저 제안할 수 있다. */
+export type StudyCoachingActor = "팀" | "전문가" | "관리자";
+
+/** study_coaching_sessions 행(관리자 경로) */
+export interface StudyCoachingSession {
+  id: string;
+  group_id: string;
+  session_no: number;
+  met_at: string;
+  start_time: string | null;
+  end_time: string | null;
+  location: string;
+  status: StudyCoachingStatus;
+  proposed_by: StudyCoachingActor;
+  expert_note: string;
+  confirmed_by: string;
+  confirmed_at: string | null;
+  created_at: string;
+}
+
+/** study_coaching_memos 행(관리자 경로) */
+export interface StudyCoachingMemo {
+  id: string;
+  group_id: string;
+  author_role: StudyCoachingActor;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+/** 조회 응답(Edge Function)의 코칭 일정 — camelCase */
+export interface StudyLookupCoachingSession {
+  id: string;
+  sessionNo: number;
+  metAt: string;
+  startTime: string | null;
+  endTime: string | null;
+  location: string;
+  status: StudyCoachingStatus;
+  proposedBy: StudyCoachingActor;
+  expertNote: string;
+  confirmedBy: string;
+  confirmedAt: string | null;
+  createdAt: string;
+}
+
+/** 조회 응답의 조율 메모 — camelCase */
+export interface StudyLookupCoachingMemo {
+  id: string;
+  authorRole: StudyCoachingActor;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+/** 팀 화면에 보여 주는 배정 전문가. 미배정이면 null */
+export interface StudyLookupExpert {
+  name: string;
+  affiliation: string;
+  position: string;
+  phone: string;
+  email: string;
+}
+
 /** study_groups.ethics_pledges 원소 — GNU 생성형 AI 윤리 8대 핵심원칙 실천 다짐 */
 export interface StudyEthicsPledgeRecord {
   no: number;
@@ -196,6 +269,9 @@ export interface StudyGroupMember {
   name: string;
   affiliation: string;
   position: string;
+  /** 참여자 연락처·이메일(0025). 도입 전 접수분은 빈 문자열 */
+  phone: string;
+  email: string;
   is_leader: boolean;
   sort_order: number;
 }
@@ -224,6 +300,9 @@ export interface StudyGroup {
   ethics_pledges: StudyEthicsPledgeRecord[];
   progress_method: StudyProgressMethod | null;
   education_mode: StudyEducationMode | null;
+  /** 배정된 교내 AI활용 전문가(0026). 관리자만 배정한다. */
+  expert_id: string | null;
+  expert_assigned_at: string | null;
   status: StudyGroupStatus;
   total_score: number | null;
   rank: number | null;
@@ -321,7 +400,13 @@ export interface StudyPriorParticipation {
 // ---------------------------------------------------------------------------
 
 /** 발송 로그의 단계. 0015의 5종 중 자동 큐가 쓰는 것은 접수확인·심사결과·이수확정 셋이다. */
-export type StudyNotificationStage = "접수확인" | "심사결과" | "운영안내" | "제출독려" | "이수확정";
+export type StudyNotificationStage =
+  | "접수확인"
+  | "심사결과"
+  | "운영안내"
+  | "제출독려"
+  | "이수확정"
+  | "코칭일정";
 
 export const STUDY_NOTIFICATION_STAGES: StudyNotificationStage[] = [
   "접수확인",
@@ -329,6 +414,7 @@ export const STUDY_NOTIFICATION_STAGES: StudyNotificationStage[] = [
   "운영안내",
   "제출독려",
   "이수확정",
+  "코칭일정",
 ];
 
 export type StudyNotificationStatus = "대기" | "성공" | "실패" | "취소";
@@ -369,13 +455,19 @@ export type StudyNotificationTemplateStage =
   | "접수확인"
   | "심사결과_선발"
   | "심사결과_미선발"
-  | "이수확정";
+  | "이수확정"
+  | "코칭_제안"
+  | "코칭_응답"
+  | "코칭_확정";
 
 export const STUDY_NOTIFICATION_TEMPLATE_STAGES: StudyNotificationTemplateStage[] = [
   "접수확인",
   "심사결과_선발",
   "심사결과_미선발",
   "이수확정",
+  "코칭_제안",
+  "코칭_응답",
+  "코칭_확정",
 ];
 
 export const STUDY_NOTIFICATION_TEMPLATE_LABELS: Record<StudyNotificationTemplateStage, string> = {
@@ -383,10 +475,27 @@ export const STUDY_NOTIFICATION_TEMPLATE_LABELS: Record<StudyNotificationTemplat
   심사결과_선발: "심사 결과 · 선발",
   심사결과_미선발: "심사 결과 · 미선발",
   이수확정: "이수 확정 (이수완료 시)",
+  코칭_제안: "코칭 일정 · 제안",
+  코칭_응답: "코칭 일정 · 회신",
+  코칭_확정: "코칭 일정 · 확정",
 };
 
-/** 템플릿 본문에서 치환되는 변수. 0024 트리거의 jsonb_build_object 키와 같아야 한다. */
-export const STUDY_NOTIFICATION_VARIABLES = ["성명", "접수번호", "모임명", "회차명", "접수일", "조회주소"] as const;
+/**
+ * 템플릿 본문에서 치환되는 변수. 0024 트리거의 jsonb_build_object 키와 같아야 한다.
+ * 일시·장소·회신·회차는 코칭 템플릿(0026)에서만 채워진다.
+ */
+export const STUDY_NOTIFICATION_VARIABLES = [
+  "성명",
+  "접수번호",
+  "모임명",
+  "회차명",
+  "접수일",
+  "조회주소",
+  "회차",
+  "일시",
+  "장소",
+  "회신",
+] as const;
 
 export interface StudyNotificationTemplate {
   stage: StudyNotificationTemplateStage;
@@ -404,6 +513,10 @@ export interface StudyGroupWithRelations extends StudyGroup {
   /** 목록 화면은 건수·일자만 쓰므로 본문(content)까지 실어 오지 않는다. */
   meetings: Pick<StudyMeeting, "id" | "group_id" | "met_at" | "subject">[];
   outputs: StudyOutput[];
+  /** 배정 전문가 행(0026). 미배정이면 null */
+  expert: StudyExpertApplication | null;
+  coachingSessions: StudyCoachingSession[];
+  coachingMemos: StudyCoachingMemo[];
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +529,9 @@ export interface StudyLookupMember {
   name: string;
   affiliation: string;
   position: string;
+  /** 참여자 연락처·이메일(0025). 도입 전 접수분은 빈 문자열 */
+  phone: string;
+  email: string;
   isLeader: boolean;
   sortOrder: number;
 }
@@ -509,6 +625,10 @@ export interface StudyLookupResult {
   submittedAt: string | null;
   createdAt: string;
   members: StudyLookupMember[];
+  /** 배정 전문가(0026). 미배정이면 null */
+  expert: StudyLookupExpert | null;
+  coachingSessions: StudyLookupCoachingSession[];
+  coachingMemos: StudyLookupCoachingMemo[];
   plan: StudyLookupPlan | null;
   meetings: StudyLookupMeeting[];
   report: StudyLookupReport | null;
@@ -520,4 +640,47 @@ export interface StudyLookupResult {
 export interface StudyIdentity {
   leaderName: string;
   leaderPhone: string;
+}
+
+/** 전문가 본인확인 신원 — 대표자 신원과 별도 키로 보관한다(같은 브라우저에서 섞이지 않게) */
+export interface StudyExpertIdentity {
+  expertName: string;
+  expertPhone: string;
+}
+
+/** 전문가 화면에 보여 주는 배정 팀 1건 */
+export interface StudyExpertAssignedGroup {
+  groupId: string;
+  code: string;
+  name: string;
+  topic: string;
+  category: StudyCategory;
+  status: StudyGroupStatus;
+  leaderName: string;
+  leaderAffiliation: string;
+  leaderPosition: string;
+  leaderPhone: string;
+  leaderEmail: string;
+  periodStart: string;
+  periodEnd: string;
+  memberCount: number;
+  progressMethod: StudyProgressMethod | null;
+  educationMode: StudyEducationMode | null;
+  /** 계획서 5번의 단계별 워크숍 희망일 — 전문가가 일정을 제안할 때 참고한다 */
+  workshopPref: WorkshopPreference;
+  coachingSessions: StudyLookupCoachingSession[];
+  coachingMemos: StudyLookupCoachingMemo[];
+}
+
+/** POST study-expert-lookup 응답 */
+export interface StudyExpertLookupResult {
+  expert: {
+    id: string;
+    code: string;
+    name: string;
+    affiliation: string;
+    position: string;
+    email: string;
+  };
+  groups: StudyExpertAssignedGroup[];
 }

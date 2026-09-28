@@ -13,7 +13,7 @@ import {
   lookupGroupToPdfData,
   studyPdfFilename,
 } from "@/lib/studyFormPdf";
-import { STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
+import { STUDY_COACHING_SESSIONS, STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
 import {
   STUDY_STATUS_LABELS,
   type StudyGroupStatus,
@@ -311,17 +311,76 @@ export function StudyGroupSummary({
         )}
       </section>
 
+      {/* 배정 전문가 · 코칭 일정 — 선발된 팀에만 의미가 있다 */}
+      {(group.expert || group.coachingSessions.length > 0) && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 className="text-sm font-bold text-slate-800">배정 전문가 · 코칭 일정</h2>
+            <Link href="/coaching">
+              <Button variant="outline" size="sm">
+                코칭 일정 조율
+              </Button>
+            </Link>
+          </div>
+
+          {group.expert ? (
+            <p className="mt-3 text-sm text-slate-700">
+              <strong className="text-slate-800">{group.expert.name}</strong>
+              <span className="text-slate-500">
+                {" "}
+                {[group.expert.affiliation, group.expert.position].filter(Boolean).join(" · ")}
+              </span>
+              <span className="mt-1 block text-xs text-slate-500">
+                {group.expert.phone} · {group.expert.email}
+              </span>
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">아직 전문가가 배정되지 않았습니다.</p>
+          )}
+
+          <ul className="mt-4 flex flex-col gap-2 text-sm" role="list">
+            {STUDY_COACHING_SESSIONS.map((step) => {
+              const confirmed = group.coachingSessions.find(
+                (s) => s.sessionNo === step.no && s.status === "확정"
+              );
+              return (
+                <li
+                  key={step.no}
+                  className="flex flex-wrap items-baseline gap-2 border-b border-slate-100 pb-2 last:border-b-0"
+                >
+                  <span className="w-20 shrink-0 text-xs font-semibold text-slate-500">
+                    {step.label}
+                  </span>
+                  {confirmed ? (
+                    <span className="text-slate-700">
+                      {formatDate(confirmed.metAt)}
+                      {confirmed.startTime && ` ${confirmed.startTime.slice(0, 5)}`}
+                      {confirmed.endTime && `~${confirmed.endTime.slice(0, 5)}`}
+                      {confirmed.location && ` · ${confirmed.location}`}
+                    </span>
+                  ) : (
+                    <span className="text-amber-700">미확정</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* 참여자 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                 <th scope="col" className="py-2 pr-3 font-semibold">직번</th>
                 <th scope="col" className="py-2 pr-3 font-semibold">성명</th>
                 <th scope="col" className="py-2 pr-3 font-semibold">소속</th>
-                <th scope="col" className="py-2 font-semibold">직급</th>
+                <th scope="col" className="py-2 pr-3 font-semibold">직급</th>
+                <th scope="col" className="py-2 pr-3 font-semibold">연락처</th>
+                <th scope="col" className="py-2 font-semibold">이메일</th>
               </tr>
             </thead>
             <tbody>
@@ -337,7 +396,9 @@ export function StudyGroupSummary({
                     )}
                   </td>
                   <td className="py-2 pr-3">{member.affiliation}</td>
-                  <td className="py-2">{member.position}</td>
+                  <td className="py-2 pr-3">{member.position}</td>
+                  <td className="py-2 pr-3 tabular-nums">{member.phone || "–"}</td>
+                  <td className="py-2 break-all">{member.email || "–"}</td>
                 </tr>
               ))}
             </tbody>

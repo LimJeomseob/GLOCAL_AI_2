@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { phoneSchema, emailSchema } from "./validation";
+import { phoneSchema, emailSchema, optionalPhoneSchema, optionalEmailSchema } from "./validation";
 import {
   STUDY_CATEGORIES,
   STUDY_EXPERT_STATUSES,
@@ -18,10 +18,22 @@ export const studyMemberSchema = z.object({
   name: z.string().trim().min(1, "성명을 입력해 주세요.").max(50),
   affiliation: z.string().trim().min(1, "소속을 입력해 주세요.").max(100),
   position: z.string().trim().min(1, "직급을 입력해 주세요.").max(50),
+  // 참여자별 연락처·이메일(0025). 대표자 행은 신청서 상단의 대표자 연락처·이메일을 그대로 쓴다.
+  phone: phoneSchema,
+  email: emailSchema,
   isLeader: z.boolean().default(false),
 });
 
 export type StudyMemberInput = z.infer<typeof studyMemberSchema>;
+
+/**
+ * 관리자 화면의 참여자 행 규칙. 연락처·이메일 도입(0025) 전 접수분은 빈 값이므로
+ * 관리자는 빈 값을 둔 채 다른 항목을 고칠 수 있어야 한다 — 값이 있을 때만 형식을 검사한다.
+ */
+export const studyMemberAdminSchema = studyMemberSchema.extend({
+  phone: optionalPhoneSchema,
+  email: optionalEmailSchema,
+});
 
 /** [서식 1] 신청서 — 탭 2 */
 export const studyApplySchema = z.object({
@@ -73,11 +85,13 @@ export type StudyPlanAdminInput = z.infer<typeof studyPlanAdminSchema>;
  * 참여자 명단 검증. 인원 상·하한은 회차 설정(min/max_team_size)에서 오므로
  * 스키마에 고정하지 않고 이 함수로 검사한다.
  * 최종 강제는 DB 트리거(check_study_group_submit)가 한다 — 화면 검사는 안내용.
+ * rowSchema는 행 단위 규칙 — 공개 신청은 기본값(연락처·이메일 필수), 관리자는 studyMemberAdminSchema.
  */
 export function validateMembers(
   members: StudyMemberInput[],
   min: number,
-  max: number
+  max: number,
+  rowSchema: z.ZodTypeAny = studyMemberSchema
 ): string | null {
   if (members.length < min) {
     return `참여자를 ${min}명 이상 등록해 주세요. (현재 ${members.length}명)`;
@@ -92,7 +106,7 @@ export function validateMembers(
   }
 
   for (const [index, member] of members.entries()) {
-    const parsed = studyMemberSchema.safeParse(member);
+    const parsed = rowSchema.safeParse(member);
     if (!parsed.success) {
       return `참여자 ${index + 1}행: ${parsed.error.issues[0].message}`;
     }
@@ -186,6 +200,58 @@ export const studyExpertAdminSchema = studyExpertApplySchema
   });
 
 export type StudyExpertAdminInput = z.infer<typeof studyExpertAdminSchema>;
+
+/**
+ * 코칭 일정 제안 — 팀·전문가가 같은 규칙을 쓴다(Edge Function도 동일).
+ * 시각은 회의록(studyMeetingSchema)과 달리 필수다 — 약속을 잡는 것이 목적이라 시각이 없으면 의미가 없다.
+ */
+export const studyCoachingProposalSchema = z
+  .object({
+    sessionNo: z
+      .number({ invalid_type_error: "코칭 회차를 선택해 주세요." })
+      .int()
+      .min(1, "코칭 회차를 선택해 주세요.")
+      .max(3, "코칭은 3회까지입니다."),
+    metAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "일자를 선택해 주세요."),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, "시작 시각을 입력해 주세요."),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, "종료 시각을 입력해 주세요."),
+    location: z.string().trim().min(1, "장소를 입력해 주세요.").max(200),
+  })
+  .refine((v) => v.startTime < v.endTime, {
+    message: "종료 시각은 시작 시각보다 뒤여야 합니다.",
+    path: ["endTime"],
+  });
+
+export type StudyCoachingProposalInput = z.infer<typeof studyCoachingProposalSchema>;
+
+/** 전문가의 가능/불가 회신 */
+export const studyCoachingResponseSchema = z.object({
+  response: z.enum(["가능", "불가"], {
+    errorMap: () => ({ message: "가능 또는 불가를 선택해 주세요." }),
+  }),
+  note: z.string().trim().max(500, "메모는 500자 이내로 작성해 주세요.").default(""),
+});
+
+export type StudyCoachingResponseInput = z.infer<typeof studyCoachingResponseSchema>;
+
+/** 조율 메모 1건 */
+export const studyCoachingMemoSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "메모 내용을 입력해 주세요.")
+    .max(2000, "메모는 2,000자 이내로 작성해 주세요."),
+});
+
+export type StudyCoachingMemoInput = z.infer<typeof studyCoachingMemoSchema>;
+
+/** 전문가 본인확인(성명 + 연락처) — 배정 팀 조회 게이트 */
+export const studyExpertIdentitySchema = z.object({
+  expertName: z.string().trim().min(1, "성명을 입력해 주세요."),
+  expertPhone: phoneSchema,
+});
+
+export type StudyExpertIdentityInput = z.infer<typeof studyExpertIdentitySchema>;
 
 /** 본인확인(대표자 성명 + 연락처) — 탭 3~6의 게이트 */
 export const studyIdentitySchema = z.object({
