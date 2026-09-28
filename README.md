@@ -180,6 +180,9 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
     고르면 둘 다 설정(전문가 「배정 팀 확인」에도 팀이 나타남), '직접 입력'(외부 전문가)은 표기만 바꾸고
     `expert_id`는 해제합니다. 전문가 「배정 팀 확인」도 같은 최종 일정을 보여 줍니다(`study-expert-lookup` 응답의
     `finalSchedule`).
+    「연구모임 관리」 상세 팝업과 운영현황 행 펼침은 **같은 배정 폼**(`StudyExpertAssignForm`)을 쓰고, 두 목록의
+    '배정 전문가' 칸도 같은 기준(`studyGroupExpertDisplay` — 팀 화면 표기 우선, 교내 연결이면 "교내" 배지)으로
+    표시합니다. 최종 일정 팝업에서 'AI 전문가' 첫 줄 이름을 교내 전문가가 아닌 사람으로 바꾸면 교내 연결을 풉니다.
     두 경로 모두 Edge Function을 거치지 않고
     관리자 브라우저에서 RLS `is_admin()`으로 테이블을 직접 갱신하며(`src/lib/studyAdmin.ts`),
     접수 구간·팀 규모 검사는 DB 트리거가 관리자에게 면제합니다(`0013`·`0019`).

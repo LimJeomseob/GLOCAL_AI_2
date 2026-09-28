@@ -8,7 +8,12 @@ import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { StudyProgressRowEditor } from "@/components/admin/StudyProgressRowEditor";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
-import { fetchStudyExpertApplications, fetchStudyGroups, fetchStudyRounds } from "@/lib/studyAdmin";
+import {
+  fetchStudyExpertApplications,
+  fetchStudyGroups,
+  fetchStudyRounds,
+  studyGroupExpertDisplay,
+} from "@/lib/studyAdmin";
 import { STUDY_COACHING_TARGET_COUNT, STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
 import {
   STUDY_OUTPUT_TYPES,
@@ -218,9 +223,8 @@ export function StudyProgressView() {
                     const reportDone = Boolean(g.report?.submitted_at);
                     const coachingDone = g.coachingSessions.filter((s) => s.status === "확정").length;
                     const expanded = expandedId === g.id;
-                    // 팀 화면에 보이는 'AI 전문가' 표기(첫 줄)를 우선 — 외부 전문가도 여기서 보인다.
-                    const expertName =
-                      g.finalSchedule?.expert_label?.split("\n")[0]?.trim() || g.expert?.name || "";
+                    // 연구모임 관리 목록과 같은 기준 — 팀 화면 'AI 전문가' 표기 우선
+                    const { name: expertName, internal } = studyGroupExpertDisplay(g);
                     return (
                       <Fragment key={g.id}>
                         <tr
@@ -251,7 +255,7 @@ export function StudyProgressView() {
                             {expertName ? (
                               <span className="flex flex-wrap items-center gap-1">
                                 {expertName}
-                                {g.expert_id && (
+                                {internal && (
                                   <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand">
                                     교내
                                   </span>

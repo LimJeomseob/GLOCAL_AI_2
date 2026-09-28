@@ -213,6 +213,18 @@ export function formatExpertLabel(expert: Pick<StudyExpertApplication, "name" | 
   return org ? `${expert.name}\n(${org})` : expert.name;
 }
 
+/**
+ * 관리자 화면(연구모임 관리·운영현황)이 공통으로 쓰는 '배정 전문가' 표시값.
+ * 팀 화면에 보이는 'AI 전문가' 표기(첫 줄)를 우선 — 외부 전문가도 보인다. internal은 교내 연결 여부.
+ */
+export function studyGroupExpertDisplay(
+  group: Pick<StudyGroupWithRelations, "expert_id" | "expert" | "finalSchedule">
+): { name: string; internal: boolean } {
+  const name =
+    group.finalSchedule?.expert_label?.split("\n")[0]?.trim() || group.expert?.name || "";
+  return { name, internal: Boolean(group.expert_id) };
+}
+
 /** 전문가 배정 선택지 — 목록(교내 선정 전문가), 직접 입력(외부 전문가), 해제 */
 export type StudyExpertChoice =
   | { kind: "listed"; expert: StudyExpertApplication }
