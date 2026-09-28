@@ -38,8 +38,9 @@
     expert-apply/plan/meeting-save/meeting-delete/report/coaching-*/expert-coaching-*)로 갈리는 판별 유니온.
     `apply-edit`은 '내 연구모임'
     탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `members-edit`은 선발 이후
-    (selected·in_progress) 같은 탭에서 **참여자 명단만** 고치는 경로로, 대표자 행은 서버가 신청서의 대표자 항목으로
-    다시 만든다(본인확인 키인 대표자 연락처는 이 경로로 바뀌지 않는다). `final-schedule-save`는 같은 구간에
+    (selected·in_progress) 같은 탭에서 **참여자 명단과 대표자 항목**을 고치는 경로로, 대표자 행은 서버가 화면이 보낸
+    대표자 값(`leader`)으로 신청서의 대표자 항목(`leader_*`)과 함께 다시 만든다. 대표자 성명·연락처가 바뀌면
+    이후 본인확인은 새 값으로 한다(apply-edit과 같은 방식). `final-schedule-save`는 같은 구간에
     대표자가 팀별 최종 일정(`0027`)의 3단계 일시·세부내용만 고치는 경로다(팀 구성·AI 전문가·공개 여부는 관리자 전용,
     `updated_by`에 "팀 대표자 OOO"로 남는다). `expert-apply`는 연구모임을 코칭할
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
