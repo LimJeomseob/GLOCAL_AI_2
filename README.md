@@ -68,12 +68,15 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0028`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0029`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0028` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0029` 연구모임 트랙
    - `0027`은 팀별 최종 일정·전문가 배정 결과 공지 테이블(`study_final_schedules`), `0028`은 2026-2학기 확정표
      시드입니다. 시드는 "회차 + 대표자 성명"으로 팀을 찾으므로 대표자 성명이 확정표와 다르거나 같은 성명의
      팀이 둘 이상이면 건너뛰고(`raise notice`), 그 팀은 「연구모임 관리」 상세 팝업에서 직접 입력합니다.
+   - `0029`는 확정표 기준 팀별 AI 전문가 배정입니다. 전문가 이름이 이 회차 **선정** 전문가와 정확히 1명 일치하면
+     `expert_id`까지 연결하고(전문가 「배정 팀 확인」에 표시), 아니면 팀 화면 표기만 둡니다. 결과는 팀별 NOTICE로
+     나오며, 여러 번 실행해도 결과가 같습니다.
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
