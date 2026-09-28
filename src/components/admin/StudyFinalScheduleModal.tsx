@@ -98,7 +98,11 @@ export function StudyFinalScheduleModal({ group, onClose, onSaved }: StudyFinalS
     if (!input) return;
 
     setBusy(true);
-    const message = await upsertStudyFinalSchedule(group.id, input);
+    // 'AI 전문가' 표기는 운영현황 드롭다운(assignStudyGroupExpertWithLabel)만 바꾼다 — 여기서는 저장된 값을 그대로 보낸다.
+    const message = await upsertStudyFinalSchedule(group.id, {
+      ...input,
+      expertLabel: group.finalSchedule?.expert_label ?? "",
+    });
     setBusy(false);
 
     if (message) {
@@ -177,22 +181,15 @@ export function StudyFinalScheduleModal({ group, onClose, onSaved }: StudyFinalS
               )}
             </FormField>
           </div>
+          {/* 전문가 배정은 드롭다운 단일 경로 — 자유 텍스트로 적으면 전문가 연결이 없어 「배정 팀 확인」이 열리지 않는다 */}
           <div className="mt-4">
-            <FormField
-              label="AI 전문가"
-              error={errors.expertLabel}
-              hint="예: OOO / (소속·직위) — 외부 전문가도 그대로 적습니다. 개별 학습 팀은 '개별 학습'"
-            >
-              {(inputProps) => (
-                <textarea
-                  {...inputProps}
-                  rows={2}
-                  className={`${inputBaseClass} resize-y leading-relaxed`}
-                  value={form.expertLabel}
-                  onChange={(e) => updateField("expertLabel", e.target.value)}
-                />
-              )}
-            </FormField>
+            <p className="text-sm font-semibold text-slate-700">AI 전문가</p>
+            <p className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {form.expertLabel || "미배정"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              배정은 운영현황 행의 &apos;AI 전문가 배정&apos; 드롭다운에서 「전문가 신청자」에 등록된 전문가를 골라 합니다.
+            </p>
           </div>
         </fieldset>
 

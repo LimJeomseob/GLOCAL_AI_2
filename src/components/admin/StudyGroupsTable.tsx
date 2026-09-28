@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyGroupEditModal } from "@/components/admin/StudyGroupEditModal";
-import { StudyFinalScheduleModal } from "@/components/admin/StudyFinalScheduleModal";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { downloadPdf } from "@/lib/download";
@@ -18,9 +18,7 @@ import {
 } from "@/lib/studyFormPdf";
 import {
   aggregateWorkshopDemand,
-  assignStudyGroupExpertWithLabel,
   deleteStudyGroups,
-  fetchStudyExpertApplications,
   fetchStudyGroups,
   fetchStudyRounds,
   finalizeStudyReview,
@@ -29,14 +27,13 @@ import {
 } from "@/lib/studyAdmin";
 import {
   STUDY_EDUCATION_MODES,
+  STUDY_OPERATING_STATUSES,
   STUDY_PROGRESS_METHODS,
   STUDY_WORKSHOP_STEPS,
-  studyCoachingSessionLabel,
 } from "@/lib/studyGroupConstants";
 import {
   STUDY_GROUP_STATUSES,
   STUDY_STATUS_LABELS,
-  type StudyExpertApplication,
   type StudyGroupStatus,
   type StudyGroupWithRelations,
   type StudyRound,
@@ -45,9 +42,10 @@ import {
 const ALL = "__all__";
 
 /**
- * 관리자 탭 A. 연구모임 관리.
+ * 관리자 탭 A. 연구모임 관리 — **선발 전** 단계(접수 → 심사 집계 → 선발 확정)를 다룬다.
  * 현행 ApplicantsTable의 패턴(필터 → useMemo 파생 → 행 단위 변경 후 로컬 갱신)을 따르되,
  * 연구모임에만 있는 두 가지를 더한다: 계획서 상세 보기, 워크숍 희망일 교차집계.
+ * 선발 이후의 전문가 배정·일정·진척·이수는 「연구모임 운영현황」이 맡는다 — 같은 입력을 두 곳에 두지 않는다.
  */
 export function StudyGroupsTable() {
   const [rounds, setRounds] = useState<StudyRound[]>([]);
@@ -62,11 +60,7 @@ export function StudyGroupsTable() {
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  /** 최종 일정 공지(0027) 입력 대상 */
-  const [scheduleEditId, setScheduleEditId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
-  /** 배정 후보 — 이 회차에서 선정된 전문가만 배정할 수 있다. */
-  const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
   const [busy, setBusy] = useState(false);
   // 상세 모달 안에서 보여줄 PDF 생성 오류. 페이지 상단 error 배너는 모달 뒤에 가려진다.
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -75,7 +69,6 @@ export function StudyGroupsTable() {
   const detailTitleId = useId();
   const demandTitleId = useId();
   const multiDeptSelectId = useId();
-  const expertSelectId = useId();
 
   useEffect(() => {
     let active = true;
@@ -98,16 +91,12 @@ export function StudyGroupsTable() {
     };
   }, []);
 
-  const load = useCallback(async (id: string) => {
-    setLoading(true);
+  /** silent: 저장 뒤 재조회 — 목록을 "불러오는 중"으로 비우지 않아 열린 상세 팝업이 그대로 남는다. */
+  const load = useCallback(async (id: string, { silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const [data, expertRows] = await Promise.all([
-        fetchStudyGroups(id),
-        fetchStudyExpertApplications(id),
-      ]);
-      setGroups(data);
-      setExperts(expertRows.filter((e) => e.status === "selected"));
+      setGroups(await fetchStudyGroups(id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "연구모임을 불러오지 못했습니다.");
     } finally {
@@ -138,7 +127,6 @@ export function StudyGroupsTable() {
   const detail = groups.find((g) => g.id === detailId) ?? null;
   // 편집 대상도 목록에서 파생해 재조회 후 최신 값을 보게 한다.
   const editTarget = groups.find((g) => g.id === editId) ?? null;
-  const scheduleTarget = groups.find((g) => g.id === scheduleEditId) ?? null;
   const demand = useMemo(() => aggregateWorkshopDemand(groups), [groups]);
 
   /**
@@ -164,32 +152,6 @@ export function StudyGroupsTable() {
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, status: status as StudyGroupStatus } : g))
     );
-  }
-
-  /**
-   * 전문가 배정. 빈 값이면 배정 해제.
-   * 운영현황과 같은 경로(assignStudyGroupExpertWithLabel)로 팀 화면 'AI 전문가' 표기까지 함께 바꾼다.
-   */
-  async function handleAssignExpert(groupId: string, rawExpertId: string) {
-    const group = groups.find((g) => g.id === groupId);
-    if (!group) return;
-    const expert = rawExpertId ? (experts.find((e) => e.id === rawExpertId) ?? null) : null;
-
-    setBusy(true);
-    setNotice(null);
-    const message = await assignStudyGroupExpertWithLabel(
-      group,
-      expert ? { kind: "listed", expert } : { kind: "none" }
-    );
-    setBusy(false);
-
-    if (message) {
-      setError(message);
-      return;
-    }
-    // 최종 일정 행이 새로 생기거나 표기가 바뀌므로 목록을 다시 읽는다(상세 팝업은 목록에서 파생).
-    if (roundId) await load(roundId);
-    setNotice(expert ? `전문가 ${expert.name} 님을 배정했습니다.` : "전문가 배정을 해제했습니다.");
   }
 
   /** 복수 학과 판정 수동 보정 — "auto" | "yes" | "no" */
@@ -332,7 +294,6 @@ export function StudyGroupsTable() {
         { header: "계획서제출", accessor: (g) => (g.plan?.submitted_at ? "Y" : "N") },
         { header: "회의록건수", accessor: (g) => g.meetings.length },
         { header: "결과보고제출", accessor: (g) => (g.report?.submitted_at ? "Y" : "N") },
-        { header: "제출일", accessor: (g) => (g.submitted_at ? formatDateTime(g.submitted_at) : "") },
       ],
       `연구모임관리_${new Date().toISOString().slice(0, 10)}.csv`
     );
@@ -352,7 +313,12 @@ export function StudyGroupsTable() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 관리</h1>
           <p className="mt-1 text-sm text-slate-600">
-            신청 접수부터 선발 확정까지 관리합니다. {round && `선발 ${round.max_teams}개 팀`}
+            신청 접수부터 선발 확정까지 관리합니다. {round && `선발 ${round.max_teams}개 팀. `}
+            선발 이후의 전문가 배정·일정·진척은{" "}
+            <Link href="/admin/study-progress" className="font-semibold text-accent underline underline-offset-2">
+              연구모임 운영현황
+            </Link>
+            에서 합니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -437,7 +403,7 @@ export function StudyGroupsTable() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[1360px] text-sm">
+          <table className="w-full min-w-[1240px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                 <th scope="col" className="px-3 py-3 font-semibold">
@@ -457,7 +423,6 @@ export function StudyGroupsTable() {
                 <th scope="col" className="px-3 py-3 text-right font-semibold">인원</th>
                 <th scope="col" className="px-3 py-3 font-semibold">진행방법</th>
                 <th scope="col" className="px-3 py-3 font-semibold">교육형태</th>
-                <th scope="col" className="px-3 py-3 font-semibold">배정 전문가</th>
                 <th scope="col" className="px-3 py-3 font-semibold">제출</th>
                 <th scope="col" className="px-3 py-3 text-right font-semibold">총점/순위</th>
                 <th scope="col" className="px-3 py-3 font-semibold">상태</th>
@@ -467,7 +432,7 @@ export function StudyGroupsTable() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={12} className="px-3 py-10 text-center text-slate-500">
                     조건에 맞는 연구모임이 없습니다.
                   </td>
                 </tr>
@@ -517,19 +482,6 @@ export function StudyGroupsTable() {
                       title={STUDY_EDUCATION_MODES.find((m) => m.key === g.education_mode)?.label}
                     >
                       {g.education_mode ?? "–"}
-                    </td>
-                    <td className="px-3 py-3 text-xs text-slate-700">
-                      {g.expert ? (
-                        <>
-                          <span className="block font-semibold text-slate-800">{g.expert.name}</span>
-                          <span className="mt-0.5 block text-slate-500">
-                            코칭 확정{" "}
-                            {g.coachingSessions.filter((s) => s.status === "확정").length}/3
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-slate-400">미배정</span>
-                      )}
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-600">
                       계획 {g.plan?.submitted_at ? "✓" : "–"} · 회의 {g.meetings.length} · 보고{" "}
@@ -595,166 +547,19 @@ export function StudyGroupsTable() {
               {STUDY_EDUCATION_MODES.find((m) => m.key === detail.education_mode)?.label ?? "미선택"}
             </p>
 
-            {/* 전문가 배정 — 배정해야 팀·전문가 화면의 코칭 일정 조율이 열린다 */}
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                <label htmlFor={expertSelectId} className="font-semibold text-slate-700">
-                  배정 전문가
-                </label>
-                <select
-                  id={expertSelectId}
-                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
-                  value={detail.expert_id ?? ""}
-                  disabled={busy}
-                  onChange={(e) => void handleAssignExpert(detail.id, e.target.value)}
+            {/* 선발 이후 항목(전문가 배정·최종 일정·코칭·진척)은 운영현황에서만 다룬다 */}
+            {STUDY_OPERATING_STATUSES.has(detail.status) && (
+              <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                선발된 팀입니다. 전문가 배정·기획/제작/환류 일정·코칭·회의록·산출물 진척은{" "}
+                <Link
+                  href="/admin/study-progress"
+                  className="font-semibold text-accent underline underline-offset-2"
                 >
-                  <option value="">미배정</option>
-                  {experts.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.affiliation})
-                    </option>
-                  ))}
-                </select>
-                {detail.expert ? (
-                  <span className="text-slate-500">
-                    {detail.expert.phone} · {detail.expert.email}
-                  </span>
-                ) : (
-                  <span className="text-slate-500">
-                    배정하면 팀과 전문가가 코칭 일정을 잡을 수 있습니다.
-                  </span>
-                )}
-              </div>
-
-              {experts.length === 0 && (
-                <p className="mt-2 text-xs text-amber-700">
-                  이 회차에 선정된 전문가가 없습니다. 「전문가 신청자」 탭에서 상태를 선정으로 바꾸면
-                  배정 후보에 나타납니다.
-                </p>
-              )}
-
-              {detail.coachingSessions.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1 text-xs text-slate-600" role="list">
-                  {detail.coachingSessions.map((s) => (
-                    <li key={s.id}>
-                      <span className="font-semibold text-slate-700">
-                        {studyCoachingSessionLabel(s.session_no)}
-                      </span>{" "}
-                      {formatDate(s.met_at)}
-                      {s.start_time && ` ${s.start_time.slice(0, 5)}`}
-                      {s.end_time && `~${s.end_time.slice(0, 5)}`}
-                      {s.location && ` · ${s.location}`}
-                      <span
-                        className={
-                          s.status === "확정"
-                            ? "ml-2 font-bold text-brand"
-                            : "ml-2 text-slate-500"
-                        }
-                      >
-                        {s.status}
-                      </span>
-                      {s.expert_note && (
-                        <span className="ml-2 text-slate-400">({s.expert_note})</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {detail.coachingMemos.length > 0 && (
-                <div className="mt-3 border-t border-slate-200 pt-2">
-                  <p className="text-xs font-semibold text-slate-700">조율 메모</p>
-                  <ul className="mt-1 flex flex-col gap-1 text-xs text-slate-600" role="list">
-                    {detail.coachingMemos.map((m) => (
-                      <li key={m.id}>
-                        <span className="font-semibold text-slate-500">
-                          {m.author_role}
-                          {m.author_name && ` ${m.author_name}`}
-                        </span>{" "}
-                        {m.body}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* 최종 일정 · 전문가 배정 결과 공지(0027) — 대표자가 '내 연구모임'에서 자기 팀 것만 본다 */}
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-slate-700">
-                  최종 일정 · 전문가 배정 결과
-                  {detail.finalSchedule && !detail.finalSchedule.published && (
-                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                      비공개
-                    </span>
-                  )}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => {
-                    setScheduleEditId(detail.id);
-                    setDetailId(null);
-                  }}
-                >
-                  {detail.finalSchedule ? "일정 수정" : "일정 입력"}
-                </Button>
-              </div>
-
-              {detail.finalSchedule ? (
-                <div className="mt-2 text-xs text-slate-600">
-                  <p className="whitespace-pre-line">
-                    {detail.finalSchedule.team_no != null && (
-                      <span className="mr-2 font-semibold text-slate-700">
-                        {detail.finalSchedule.team_no}팀
-                      </span>
-                    )}
-                    {detail.finalSchedule.composition}
-                  </p>
-                  <p className="mt-1 whitespace-pre-line">
-                    <span className="font-semibold text-slate-700">AI 전문가</span>{" "}
-                    {detail.finalSchedule.expert_label || "–"}
-                  </p>
-                  <ul className="mt-2 flex flex-col gap-1" role="list">
-                    {STUDY_WORKSHOP_STEPS.map((step) => {
-                      const schedule = detail.finalSchedule!;
-                      const when =
-                        step.order === 1
-                          ? schedule.step1_when
-                          : step.order === 2
-                            ? schedule.step2_when
-                            : schedule.step3_when;
-                      const stepDetail =
-                        step.order === 1
-                          ? schedule.step1_detail
-                          : step.order === 2
-                            ? schedule.step2_detail
-                            : schedule.step3_detail;
-                      return (
-                        <li key={step.key} className="whitespace-pre-line">
-                          <span className="font-semibold text-slate-700">{step.name}</span>{" "}
-                          {when || "미정"}
-                          {stepDetail && <span className="text-slate-500"> · {stepDetail}</span>}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {detail.finalSchedule.updated_by && (
-                    <p className="mt-2 text-slate-400">
-                      마지막 수정 {detail.finalSchedule.updated_by} ·{" "}
-                      {formatDateTime(detail.finalSchedule.updated_at)}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">
-                  아직 입력하지 않았습니다. 확정표의 팀 구성·AI 전문가·기획/제작/환류 일시를 입력하면
-                  대표자 화면에 표시됩니다.
-                </p>
-              )}
-            </div>
+                  연구모임 운영현황
+                </Link>
+                에서 확인·수정합니다.
+              </p>
+            )}
 
             {/* 복수 학과 판정 — 자동(소속 정규화 비교)이 놓친 표기 차이는 여기서 관리자가 확정한다 */}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -906,27 +711,6 @@ export function StudyGroupsTable() {
         />
       )}
 
-      {/* 최종 일정 · 전문가 배정 결과 입력(0027) */}
-      {scheduleTarget && (
-        <StudyFinalScheduleModal
-          key={scheduleTarget.id}
-          group={scheduleTarget}
-          onClose={() => {
-            const backId = scheduleTarget.id;
-            setScheduleEditId(null);
-            setDetailId(backId);
-          }}
-          onSaved={async (message) => {
-            const savedId = scheduleTarget.id;
-            setScheduleEditId(null);
-            setError(null);
-            if (roundId) await load(roundId);
-            setNotice(message);
-            setDetailId(savedId);
-          }}
-        />
-      )}
-
       {/* 워크숍 희망일 교차집계 — 강사 배정안의 기초 자료 */}
       <Modal open={demandOpen} onClose={() => setDemandOpen(false)} titleId={demandTitleId}>
         <h2 id={demandTitleId} className="text-lg font-bold text-brand">
@@ -976,3 +760,4 @@ export function StudyGroupsTable() {
     </div>
   );
 }
+

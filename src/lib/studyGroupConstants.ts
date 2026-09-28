@@ -525,3 +525,14 @@ export const STUDY_ETHICS_PRINCIPLES = [
     ],
   },
 ] as const;
+
+/**
+ * 운영 단계 상태 — 선발 확정 이후. 관리자 화면의 역할을 이 경계로 나눈다:
+ * 「연구모임 관리」는 이 밖(접수·심사·선발), 「연구모임 운영현황」은 이 안(배정·일정·진척·이수)을 다룬다.
+ */
+export const STUDY_OPERATING_STATUSES: ReadonlySet<string> = new Set([
+  "selected",
+  "in_progress",
+  "report_submitted",
+  "completed",
+]);

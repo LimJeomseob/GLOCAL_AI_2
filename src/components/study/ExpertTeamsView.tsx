@@ -61,7 +61,7 @@ export function ExpertTeamsView() {
       // 불일치는 에러가 아니다. 자동 조회면 조용히 입력 폼을 보여 준다.
       if (!silent) {
         setMessage(
-          "일치하는 전문가 신청이 없습니다. 성명과 연락처를 확인해 주세요. 선정된 전문가만 조회할 수 있습니다."
+          "일치하는 전문가가 없습니다. 성명과 연락처를 확인해 주세요. AI융합원에 등록·배정된 전문가만 조회할 수 있으며, 등록 정보가 다르면 AI융합원에 문의해 주세요."
         );
       }
       clearExpertIdentity();
@@ -141,7 +141,7 @@ export function ExpertTeamsView() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">배정 팀 확인</h1>
           <p className="mt-2 text-sm text-slate-600 sm:text-base">
-            선정된 교내 AI활용 전문가가 배정된 연구모임을 확인하고 코칭 일정을 조율합니다.
+            AI 전문가가 배정된 연구모임을 확인하고 코칭 일정을 조율합니다.
           </p>
         </div>
 
@@ -153,8 +153,8 @@ export function ExpertTeamsView() {
           <div>
             <h2 className="text-base font-bold text-slate-800">본인확인</h2>
             <p className="mt-1 text-sm text-slate-600">
-              전문가 신청서에 적은 <strong>성명과 연락처</strong>를 입력하면 배정된 연구모임이
-              열립니다.
+              전문가 신청서 또는 AI융합원에 등록한 <strong>성명과 연락처</strong>를 입력하면 배정된
+              연구모임이 열립니다.
             </p>
           </div>
 
