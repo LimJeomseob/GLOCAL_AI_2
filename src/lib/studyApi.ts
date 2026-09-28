@@ -290,26 +290,8 @@ export interface StudyNextStep {
   href: string | null;
 }
 
-/** 확정된 코칭 회차 수. 회차(1~3)별로 확정은 최대 1건이다(DB 부분 유니크). */
-export function countConfirmedCoaching(result: StudyLookupResult): number {
-  return result.coachingSessions.filter((s) => s.status === "확정").length;
-}
-
 /** '내 연구모임' 탭의 CTA. 상태마다 팀이 지금 해야 할 일 하나만 제시한다. */
 export function deriveNextStep(result: StudyLookupResult): StudyNextStep {
-  // 운영 단계에서 전문가가 배정됐는데 코칭 3회가 아직 안 잡혔다면 일정 잡기가 먼저다.
-  if (
-    (result.status === "selected" || result.status === "in_progress") &&
-    result.expert &&
-    countConfirmedCoaching(result) < 3
-  ) {
-    return {
-      label: "코칭 일정 잡기",
-      description: `배정 전문가 ${result.expert.name} 님과 코칭 3회(기획·제작·환류) 일정을 조율해 주세요.`,
-      href: "/coaching",
-    };
-  }
-
   switch (result.status) {
     case "draft":
       return {
