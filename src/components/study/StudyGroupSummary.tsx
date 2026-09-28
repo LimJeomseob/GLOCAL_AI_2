@@ -52,6 +52,7 @@ export function StudyGroupSummary({
   notice = null,
   onEditApplication,
   onEditMembers,
+  onEditFinalSchedule,
 }: {
   group: StudyLookupResult;
   /** 본인확인에 쓴 신원. 조회 응답에 없는 대표자 연락처를 제출본 PDF에 싣기 위해 받는다. */
@@ -62,6 +63,8 @@ export function StudyGroupSummary({
   onEditApplication?: () => void;
   /** 주어지면 「참여자」에 수정 버튼을 띄운다(선발 이후 운영 중). 실제 허용 여부는 서버가 다시 판정한다. */
   onEditMembers?: () => void;
+  /** 주어지면 「팀별 최종 일정」에 수정 버튼을 띄운다(운영 중 + 등록된 일정이 있을 때). */
+  onEditFinalSchedule?: () => void;
 }) {
   const [pdfBusy, setPdfBusy] = useState<"application" | "plan" | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -317,10 +320,24 @@ export function StudyGroupSummary({
       {/* 팀별 최종 일정 · 전문가 배정 결과(0027) — AI융합원이 확정한 공지. 이 팀 것만 내려온다 */}
       {group.finalSchedule ? (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-          <h2 className="text-sm font-bold text-slate-800">팀별 최종 일정 · 전문가 배정 결과</h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 className="text-sm font-bold text-slate-800">팀별 최종 일정 · 전문가 배정 결과</h2>
+            {onEditFinalSchedule && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEditFinalSchedule}
+                disabled={pdfBusy !== null}
+              >
+                일정 수정
+              </Button>
+            )}
+          </div>
           <p className="mt-1 text-xs text-slate-500">
-            AI융합원이 확정한 3단계(기획·제작·환류) 일정입니다. 변경이 필요하면 AI융합원으로 문의해
-            주세요.
+            AI융합원이 확정한 3단계(기획·제작·환류) 일정입니다.
+            {onEditFinalSchedule
+              ? " 일정이 바뀌면 「일정 수정」에서 일자·시간과 세부내용을 직접 고칠 수 있습니다. 팀 구성·AI 전문가 변경은 AI융합원으로 문의해 주세요."
+              : " 변경이 필요하면 AI융합원으로 문의해 주세요."}
           </p>
 
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">

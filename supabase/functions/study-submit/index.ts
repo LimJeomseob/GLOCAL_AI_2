@@ -123,6 +123,25 @@ const membersEditSchema = z.object({
   members: z.array(memberSchema).max(20),
 });
 
+/**
+ * 팀별 최종 일정(0027) 수정 — 선발 이후 '내 연구모임'에서 대표자가 3단계 일시·세부내용을 고친다.
+ * 팀 구성·AI 전문가·공개 여부는 AI융합원이 정한 값이라 이 경로로 받지 않는다(관리자 화면에서만).
+ * 일시는 원문 서식("미정", "2안 10.21(수)")을 그대로 두는 자유 텍스트다 — 화면
+ * studyFinalScheduleSchema와 같은 한도.
+ */
+const finalScheduleText = (max: number) => z.string().trim().max(max).default("");
+const finalScheduleSaveSchema = z.object({
+  kind: z.literal("final-schedule-save"),
+  groupId: z.string().uuid(),
+  ...identity,
+  step1When: finalScheduleText(500),
+  step1Detail: finalScheduleText(2000),
+  step2When: finalScheduleText(500),
+  step2Detail: finalScheduleText(2000),
+  step3When: finalScheduleText(500),
+  step3Detail: finalScheduleText(2000),
+});
+
 const planSchema = z.object({
   kind: z.literal("plan"),
   groupId: z.string().uuid(),
@@ -300,6 +319,7 @@ const bodySchema = z.discriminatedUnion("kind", [
   applySchema,
   applyEditSchema,
   membersEditSchema,
+  finalScheduleSaveSchema,
   expertApplySchema,
   planSchema,
   meetingSaveSchema,
@@ -1102,6 +1122,50 @@ Deno.serve(async (req: Request) => {
     }
 
     return jsonResponse({ ok: true, memberCount: roster.length });
+  }
+
+  // --------------------------------------------------------------------------
+  // 1-5. 팀별 최종 일정 수정(0027) — 선발 이후 대표자가 3단계 일시·세부내용을 고친다
+  // --------------------------------------------------------------------------
+  if (body.kind === "final-schedule-save") {
+    // 참여자 수정과 같은 운영 구간(selected·in_progress)에서만 연다.
+    if (!MEMBERS_EDITABLE_STATUSES.includes(group.status)) {
+      return jsonResponse(
+        { error: "현재 상태에서는 일정을 수정할 수 없습니다. 수정이 필요하면 AI융합원으로 문의해 주세요." },
+        400
+      );
+    }
+
+    // AI융합원이 등록·공개한 행만 고친다. 팀 화면에는 공개 행만 보이므로 없는 행을 만들지 않는다.
+    // updated_by에 대표자를 남겨 관리자 상세 화면에서 누가 바꿨는지 보이게 한다.
+    const { data: updated, error: updateError } = await supabase
+      .from("study_final_schedules")
+      .update({
+        step1_when: body.step1When,
+        step1_detail: body.step1Detail,
+        step2_when: body.step2When,
+        step2_detail: body.step2Detail,
+        step3_when: body.step3When,
+        step3_detail: body.step3Detail,
+        updated_by: `팀 대표자 ${group.leader_name}`,
+      })
+      .eq("group_id", body.groupId)
+      .eq("published", true)
+      .select("group_id")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("[study-submit] 최종 일정 수정 실패:", updateError);
+      return jsonResponse({ error: "저장 중 오류가 발생했습니다." }, 500);
+    }
+    if (!updated) {
+      return jsonResponse(
+        { error: "등록된 최종 일정이 없습니다. AI융합원이 일정을 등록한 뒤 수정할 수 있습니다." },
+        400
+      );
+    }
+
+    return jsonResponse({ ok: true });
   }
 
   // --------------------------------------------------------------------------

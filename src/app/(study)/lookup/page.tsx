@@ -5,6 +5,7 @@ import { StudyApplyForm, buildApplyInitialValues } from "@/components/study/Stud
 import { StudyGroupGate } from "@/components/study/StudyGroupGate";
 import { StudyGroupSummary } from "@/components/study/StudyGroupSummary";
 import { StudyMembersEditForm } from "@/components/study/StudyMembersEditForm";
+import { StudyFinalScheduleTeamForm } from "@/components/study/StudyFinalScheduleTeamForm";
 import { canEditStudyApplication, canEditStudyMembers, toStudyApplyRoundInfo } from "@/lib/studyApi";
 import type { StudyIdentity, StudyLookupResult } from "@/lib/studyTypes";
 
@@ -23,12 +24,32 @@ function StudyLookupBody({
 }) {
   const [editing, setEditing] = useState(false);
   const [editingMembers, setEditingMembers] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   // 회차 정보가 없으면 신청 구간을 판정할 수 없으므로 수정을 열지 않는다.
   const canEdit = canEditStudyApplication(group.status) && Boolean(group.round);
   // 선발 이후에는 신청서 전체가 잠기므로 참여자 명단만 따로 고칠 수 있게 연다.
   const canEditMembers = canEditStudyMembers(group.status) && Boolean(group.round);
+
+  // 최종 일정도 같은 운영 구간(selected·in_progress)에서, AI융합원이 등록·공개한 뒤에만 고친다.
+  const canEditSchedule = canEditMembers && Boolean(group.finalSchedule);
+
+  if (editingSchedule && canEditSchedule && group.finalSchedule) {
+    return (
+      <StudyFinalScheduleTeamForm
+        group={group}
+        schedule={group.finalSchedule}
+        identity={identity}
+        onSaved={async () => {
+          await refresh();
+          setEditingSchedule(false);
+          setNotice("최종 일정을 수정했습니다.");
+        }}
+        onCancel={() => setEditingSchedule(false)}
+      />
+    );
+  }
 
   if (editingMembers && canEditMembers) {
     return (
@@ -82,6 +103,14 @@ function StudyLookupBody({
           ? () => {
               setNotice(null);
               setEditingMembers(true);
+            }
+          : undefined
+      }
+      onEditFinalSchedule={
+        canEditSchedule
+          ? () => {
+              setNotice(null);
+              setEditingSchedule(true);
             }
           : undefined
       }
