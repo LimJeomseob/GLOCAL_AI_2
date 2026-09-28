@@ -1,9 +1,10 @@
 -- ============================================================================
 -- [검수용] 시스템 점검 회차 — 가상자료 입력 (일회성 운영 스크립트)
 --
--- 목적: 신청 → 심사 → 선발 → 운영(전문가 배정·코칭·회의록) → 결과보고 → 이수확정의
---       전 과정을 실제 화면에서 한 번에 시연·검수할 수 있도록, 단계별 상태의 가상 팀
---       9개와 가상 전문가 3명을 별도 회차에 넣는다. 설명서는
+-- 목적: 선발 이후 과정 — 선발 안내 → 운영(전문가 배정·팀별 최종 일정·코칭·회의록)
+--       → 결과보고 → 이수확정 — 을 실제 화면에서 시연·검수할 수 있도록, 단계별 상태의
+--       선발 팀 5개와 가상 전문가 2명을 별도 회차에 넣는다. 신청·심사 단계는 시연 대상이
+--       아니며, 점수·순위 표시에 필요한 최소 이력(계획서 제출·심사 점수)만 채운다. 설명서는
 --       docs/시스템점검회차_운영안내_가상자료.md.
 --
 -- 사용처: Supabase 대시보드 → SQL Editor. 마이그레이션이 아니므로 supabase/migrations에
@@ -140,8 +141,8 @@ do $$
 declare
   v_base public.study_rounds%rowtype;
   v_round uuid;
-  g1 uuid; g2 uuid; g3 uuid; g4 uuid; g5 uuid; g6 uuid; g7 uuid; g8 uuid; g9 uuid;
-  ex1 uuid; ex2 uuid; ex3 uuid;
+  g1 uuid; g2 uuid; g3 uuid; g4 uuid; g5 uuid;
+  ex1 uuid; ex2 uuid;
   r1 text := 'reviewer1.demo@example.com';
   r2 text := 'reviewer2.demo@example.com';
   r3 text := 'reviewer3.demo@example.com';
@@ -173,13 +174,13 @@ begin
     now() - interval '1 day', now() + interval '1 day', now() + interval '2 days',
     '2026-07-20', '2026-08-28', '2026-08-28T18:00:00+09:00',
     now() - interval '1 day', now() + interval '1 day',
-    4, 20, 3, 5,
+    5, 25, 3, 5,
     v_base.categories, v_base.criteria,
-    '[점검용 가상자료] 실제 신청이 아닙니다. 검수가 끝나면 scripts/reset_system_check_round.sql로 삭제합니다. 선발 규모 4팀.',
+    '[점검용 가상자료] 실제 신청이 아닙니다. 검수가 끝나면 scripts/reset_system_check_round.sql로 삭제합니다. 선발 규모 5팀.',
     false
   ) returning id into v_round;
 
-  -- 2) 교내 AI활용 전문가 3명 (선정 2 · 미선정 1)
+  -- 2) 교내 AI활용 전문가 2명 (선정 완료 상태)
   insert into public.study_expert_applications (
     round_id, name, affiliation, position, id_number, phone, email, is_nontenured,
     experience, categories, ai_tools, availability_confirmed, consent, created_at
@@ -200,21 +201,10 @@ begin
     '2026-07-04T14:00:00+09:00'
   ) returning id into ex2;
 
-  insert into public.study_expert_applications (
-    round_id, name, affiliation, position, id_number, phone, email, is_nontenured,
-    experience, categories, ai_tools, availability_confirmed, consent, created_at
-  ) values (
-    v_round, '문점검', '경영대학 경영학과', '시간강사', 'T91003', '010-0000-1003', 'expert3.demo@example.com', true,
-    '[가상] 교양 강좌에서 ChatGPT 활용 과제 운영 1학기',
-    array['초급'], 'ChatGPT', true, true,
-    '2026-07-08T09:30:00+09:00'
-  ) returning id into ex3;
-
-  update public.study_expert_applications set status = 'selected', note = '[점검] 1·4팀 배정' where id = ex1;
+  update public.study_expert_applications set status = 'selected', note = '[점검] 1·4·5팀 배정' where id = ex1;
   update public.study_expert_applications set status = 'selected', note = '[점검] 2·3팀 배정' where id = ex2;
-  update public.study_expert_applications set status = 'rejected', note = '[점검] 코칭 경험 요건 미충족' where id = ex3;
 
-  -- 3) 연구모임 9팀 — 상태별 1팀씩(선발 이후 단계는 여러 팀)
+  -- 3) 선발된 연구모임 5팀 — 선발 이후 단계별로 1팀씩(운영중은 2팀)
   v_plan := jsonb_build_object(
     's1', '[가상] 연구 배경: 실험 수업에서 사전 안전교육과 결과 해석 피드백이 조교 1인에게 몰려 학생 질문이 누적된다. AI 조교 에이전트로 반복 질의를 흡수하는 모델을 연구한다.',
     's2', '[가상] 목적: 교수자·조교의 반복 업무를 줄이고 학생별 즉시 피드백을 제공한다. 필요성: 대형 실험 과목(수강생 120명)의 피드백 지연 해소.',
@@ -263,63 +253,22 @@ begin
       {"id":"T90403","name":"최점검셋","aff":"경상국립대학교 기계공학과","pos":"조교수","phone":"010-0000-0403","email":"member403.demo@example.com"}]'::jsonb,
     v_plan || jsonb_build_object('s1', '[가상] 연구 배경: 열역학·동역학 개념을 정적 그림으로만 설명해 학생 이해도가 낮다. 브라우저에서 도는 시뮬레이션 교구를 바이브코딩으로 만든다.'));
 
-  -- 5팀: 미선발(rejected) — 5위, 선발 규모(4팀) 밖
+  -- 5팀: 운영중(in_progress) — 회의록 1/3, 코칭 1차 제안만 올라가 전문가 회신 대기(독려 대상)
   g5 := pg_temp.demo_group(v_round, '2026-07-07T13:00:00+09:00',
-    '판례 요약 수업 연구회', 'AI 활용 법학 판례 요약 수업', '초급',
-    '전문가코칭', '대면', false,
-    '[{"id":"T90501","name":"정점검","aff":"법과대학 법학과","pos":"교수","phone":"010-0000-0501","email":"leader5.demo@example.com"},
-      {"id":"T90502","name":"정점검둘","aff":"법과대학 법학과","pos":"부교수","phone":"010-0000-0502","email":"member502.demo@example.com"},
-      {"id":"T90503","name":"정점검셋","aff":"행정학과","pos":"조교수","phone":"010-0000-0503","email":"member503.demo@example.com"}]'::jsonb,
-    v_plan || jsonb_build_object('s3', '[가상] ChatGPT로 판례 요약. (구체적 단계·요청사항 미기재)'));
-
-  -- 6팀: 심사중(under_review) — 심사위원 3인 중 2인 제출
-  g6 := pg_temp.demo_group(v_round, '2026-07-08T16:00:00+09:00',
-    '농업 데이터 RAG 연구회', '스마트팜 데이터 해설 RAG 도우미', '중급',
+    '스마트팜 데이터 RAG 연구회', '스마트팜 데이터 해설 RAG 도우미', '중급',
     '전문가코칭', '비대면', false,
-    '[{"id":"T90601","name":"강점검","aff":"농업생명과학대학 원예과학부","pos":"부교수","phone":"010-0000-0601","email":"leader6.demo@example.com"},
-      {"id":"T90602","name":"강점검둘","aff":"농업생명과학대학 스마트농산업학과","pos":"조교수","phone":"010-0000-0602","email":"member602.demo@example.com"},
-      {"id":"T90603","name":"강점검셋","aff":"농업생명과학대학 원예과학부","pos":"교수","phone":"010-0000-0603","email":"member603.demo@example.com"}]'::jsonb,
-    v_plan);
+    '[{"id":"T90501","name":"정점검","aff":"농업생명과학대학 원예과학부","pos":"부교수","phone":"010-0000-0501","email":"leader5.demo@example.com"},
+      {"id":"T90502","name":"정점검둘","aff":"농업생명과학대학 스마트농산업학과","pos":"조교수","phone":"010-0000-0502","email":"member502.demo@example.com"},
+      {"id":"T90503","name":"정점검셋","aff":"농업생명과학대학 원예과학부","pos":"교수","phone":"010-0000-0503","email":"member503.demo@example.com"}]'::jsonb,
+    v_plan || jsonb_build_object('s1', '[가상] 연구 배경: 스마트팜 센서 데이터 해설을 학생이 스스로 찾기 어렵다. 매뉴얼·논문 기반 RAG 도우미를 만든다.'));
 
-  -- 7팀: 제출완료(submitted) — 심사 전
-  g7 := pg_temp.demo_group(v_round, '2026-07-09T10:00:00+09:00',
-    '디자인 프로토타입 연구회', '바이브코딩 기반 인터랙션 디자인 실습 도구', '고급1',
-    '전문가코칭', '대면', false,
-    '[{"id":"T90701","name":"조점검","aff":"예술대학 디자인학과","pos":"조교수","phone":"010-0000-0701","email":"leader7.demo@example.com"},
-      {"id":"T90702","name":"조점검둘","aff":"예술대학 디자인학과","pos":"교수","phone":"010-0000-0702","email":"member702.demo@example.com"},
-      {"id":"T90703","name":"조점검셋","aff":"공과대학 컴퓨터공학과","pos":"부교수","phone":"010-0000-0703","email":"member703.demo@example.com"}]'::jsonb,
-    v_plan);
-
-  -- 8팀: 임시저장(draft) — 신청서만 저장, 계획서 미제출(작성 중)
-  g8 := pg_temp.demo_group(v_round, '2026-07-09T17:00:00+09:00',
-    '체육 동작분석 연구회', 'AI 영상분석으로 동작 피드백 수업 설계', '초급',
-    null, null, false,
-    '[{"id":"T90801","name":"윤점검","aff":"사범대학 체육교육과","pos":"부교수","phone":"010-0000-0801","email":"leader8.demo@example.com"},
-      {"id":"T90802","name":"윤점검둘","aff":"사범대학 체육교육과","pos":"조교수","phone":"010-0000-0802","email":"member802.demo@example.com"},
-      {"id":"T90803","name":"윤점검셋","aff":"스포츠과학과","pos":"교수","phone":"010-0000-0803","email":"member803.demo@example.com"}]'::jsonb,
-    jsonb_build_object('s1', '[가상] 작성 중 — 동작 분석 수업의 피드백 지연 문제.'));
-
-  -- 9팀: 취소(cancelled) — 제출 후 대표자 요청으로 취소
-  g9 := pg_temp.demo_group(v_round, '2026-07-05T11:00:00+09:00',
-    '회계 자동화 연구회', 'AI 에이전트 기반 회계원리 실습 자동 채점', '중급',
-    '전문가코칭', '비대면', false,
-    '[{"id":"T90901","name":"장점검","aff":"경영대학 회계학과","pos":"교수","phone":"010-0000-0901","email":"leader9.demo@example.com"},
-      {"id":"T90902","name":"장점검둘","aff":"경영대학 경영학과","pos":"부교수","phone":"010-0000-0902","email":"member902.demo@example.com"},
-      {"id":"T90903","name":"장점검셋","aff":"경영대학 회계학과","pos":"조교수","phone":"010-0000-0903","email":"member903.demo@example.com"}]'::jsonb,
-    v_plan);
-
-  -- 4) 계획서 제출 → submitted (접수확인 메일 큐 적재)
+  -- 4) 선발까지의 이력(접수·심사) — 선발 이후 화면에 점수·순위가 보이도록 최소한만 채운다
   perform pg_temp.demo_submit(g1, '2026-07-02T18:00:00+09:00');
   perform pg_temp.demo_submit(g2, '2026-07-03T18:00:00+09:00');
   perform pg_temp.demo_submit(g3, '2026-07-04T18:00:00+09:00');
   perform pg_temp.demo_submit(g4, '2026-07-06T18:00:00+09:00');
   perform pg_temp.demo_submit(g5, '2026-07-07T18:00:00+09:00');
-  perform pg_temp.demo_submit(g6, '2026-07-08T18:00:00+09:00');
-  perform pg_temp.demo_submit(g7, '2026-07-09T18:00:00+09:00');
-  perform pg_temp.demo_submit(g9, '2026-07-05T18:00:00+09:00');
-  update public.study_groups set status = 'cancelled' where id = g9;
 
-  -- 5) 서면심사 — 심사위원 3인(1~5팀 완료, 6팀은 2인만 제출·1인 작성 중)
   perform pg_temp.demo_review(g1, r1, 90, '[가상] 단계별 계획과 확산 방안이 구체적임.', true);
   perform pg_temp.demo_review(g1, r2, 88, '[가상] 에이전트 배포 요청사항이 명확함.', true);
   perform pg_temp.demo_review(g1, r3, 86, '[가상] 복수 학과 구성 우수.', true);
@@ -332,15 +281,11 @@ begin
   perform pg_temp.demo_review(g4, r1, 79, '[가상] 개별학습 계획이 구체적.', true);
   perform pg_temp.demo_review(g4, r2, 78, '', true);
   perform pg_temp.demo_review(g4, r3, 77, '[가상] 단일 학과 구성.', true);
-  perform pg_temp.demo_review(g5, r1, 66, '[가상] AI 플랫폼 활용 계획이 추상적임.', true);
-  perform pg_temp.demo_review(g5, r2, 64, '[가상] 요청사항 미기재.', true);
-  perform pg_temp.demo_review(g5, r3, 65, '', true);
-  perform pg_temp.demo_review(g6, r1, 82, '[가상] 데이터 출처 명시 우수.', true);
-  perform pg_temp.demo_review(g6, r2, 80, '', true);
-  perform pg_temp.demo_review(g6, r3, 75, '[가상] 작성 중(미제출)', false);
+  perform pg_temp.demo_review(g5, r1, 77, '[가상] 데이터 출처 명시 우수.', true);
+  perform pg_temp.demo_review(g5, r2, 76, '', true);
+  perform pg_temp.demo_review(g5, r3, 75, '', true);
 
-  -- 6) 심사 확정 — finalize_study_review()와 같은 규칙(3인 평균 → 순위 → 상위 4팀 선발)
-  --    을 SQL로 재현한다. 그 함수는 is_admin()을 요구해 SQL Editor에서 부를 수 없다.
+  -- 5) 선발 확정 — 3인 평균 → 순위 (finalize_study_review()는 is_admin()을 요구해 SQL로 재현)
   update public.study_groups g
   set total_score = s.avg_total, rank = s.rk
   from (
@@ -352,18 +297,16 @@ begin
   ) s
   where g.id = s.group_id;
 
-  update public.study_groups set status = 'under_review' where id = g6;
-  update public.study_groups set status = 'selected' where id in (g1, g2, g3, g4);  -- 심사결과(선발) 큐
-  update public.study_groups set status = 'rejected' where id = g5;                -- 심사결과(미선발) 큐
+  update public.study_groups set status = 'selected' where id in (g1, g2, g3, g4, g5);  -- 선발 안내 큐
 
-  -- 7) 전문가 배정 (관리자 「연구모임 운영현황」에서 하는 작업)
-  update public.study_groups set expert_id = ex1, expert_assigned_at = '2026-07-18T10:00:00+09:00' where id in (g1, g4);
+  -- 6) 전문가 배정 (관리자 「연구모임 운영현황」에서 하는 작업)
+  update public.study_groups set expert_id = ex1, expert_assigned_at = '2026-07-18T10:00:00+09:00' where id in (g1, g4, g5);
   update public.study_groups set expert_id = ex2, expert_assigned_at = '2026-07-18T10:00:00+09:00' where id in (g2, g3);
 
-  -- 8) 운영 개시 → in_progress, 이후 단계
-  update public.study_groups set status = 'in_progress' where id in (g1, g2, g3);
+  -- 7) 운영 개시 → in_progress, 이후 단계
+  update public.study_groups set status = 'in_progress' where id in (g1, g2, g3, g5);
 
-  -- 9) 팀별 최종 일정 공지 (4팀은 관리자가 입력 중 → 비공개)
+  -- 8) 팀별 최종 일정 공지 (4팀은 관리자가 입력 중 → 비공개)
   insert into public.study_final_schedules (
     group_id, team_no, composition, expert_label,
     step1_when, step1_detail, step2_when, step2_detail, step3_when, step3_detail, note, published, updated_by
@@ -381,9 +324,11 @@ begin
    '8.14(금) 14:00' || chr(10) || '/ 2안 8.13(목)', '[가상] 루브릭 기반 피드백 프롬프트 제작',
    '미정', '[가상] 수업 적용 결과 환류', '', true, '팀 대표자 박점검'),
   (g4, 4, '최점검 등 3명' || chr(10) || '(고급 1, 실시간 비대면)', '개별 학습',
-   '미정', '', '미정', '', '미정', '', '[점검] 관리자 입력 중 — 팀 화면 비공개', false, '[점검] 가상자료');
+   '미정', '', '미정', '', '미정', '', '[점검] 관리자 입력 중 — 팀 화면 비공개', false, '[점검] 가상자료'),
+  (g5, 5, '팀장 정점검 등 3명' || chr(10) || '(중급, 실시간 비대면)', '한점검' || chr(10) || '(컴퓨터공학과 교수)',
+   '조율 중', '[가상] 센서 데이터·매뉴얼 RAG 설계', '미정', '[가상] RAG 도우미 제작', '미정', '[가상] 수업 적용 환류', '', true, '[점검] 가상자료');
 
-  -- 10) 코칭 일정 조율 (1팀: 3회 모두 확정 / 3팀: 1차 확정, 2차 조율 중)
+  -- 9) 코칭 일정 조율 (1팀: 3회 모두 확정 / 3팀: 1차 확정, 2차 조율 중)
   insert into public.study_coaching_sessions (
     group_id, session_no, met_at, start_time, end_time, location, status, proposed_by,
     expert_note, confirmed_by, confirmed_at, created_at
@@ -393,14 +338,15 @@ begin
   (g1, 3, '2026-08-26', '15:00', '17:00', 'Zoom', '확정', '전문가', '', '대표자 김점검', '2026-08-18T09:00:00+09:00', '2026-08-17T14:00:00+09:00'),
   (g3, 1, '2026-07-24', '14:00', '16:00', '인문대학 201호', '확정', '팀', '', '전문가 서점검', '2026-07-20T10:00:00+09:00', '2026-07-19T10:00:00+09:00'),
   (g3, 2, '2026-08-13', '14:00', '16:00', '인문대학 201호', '불가', '팀', '학회 일정으로 불가', '', null, '2026-08-05T10:00:00+09:00'),
-  (g3, 2, '2026-08-14', '14:00', '16:00', '인문대학 201호', '가능', '팀', '오후 2시 이후 가능', '', null, '2026-08-06T10:00:00+09:00');
+  (g3, 2, '2026-08-14', '14:00', '16:00', '인문대학 201호', '가능', '팀', '오후 2시 이후 가능', '', null, '2026-08-06T10:00:00+09:00'),
+  (g5, 1, '2026-07-28', '10:00', '12:00', 'Zoom', '제안', '팀', '', '', null, '2026-07-21T09:00:00+09:00');
 
   insert into public.study_coaching_memos (group_id, author_role, author_name, body, created_at) values
   (g3, '팀', '박점검', '[가상] 2차 코칭 13일(목)이 어려우시면 14일(금) 오후는 어떠신지요?', '2026-08-06T10:05:00+09:00'),
   (g3, '전문가', '서점검', '[가상] 14일 오후 2시 가능합니다. 대표자님께서 확정해 주세요.', '2026-08-06T16:20:00+09:00'),
   (g3, '관리자', 'AI융합원', '[가상] 3차 일정은 8월 넷째 주 안에서 정해 주세요.', '2026-08-07T09:00:00+09:00');
 
-  -- 11) 회의록 ([서식 3]) — 1·2팀 3회, 3팀 2회
+  -- 10) 회의록 ([서식 3]) — 1·2팀 3회, 3팀 2회
   insert into public.study_meetings (group_id, met_at, start_time, end_time, location, subject, content, author_name) values
   (g1, '2026-07-22', '15:00', '17:00', '자연과학대학 352호', '1차 코칭(기획) — 에이전트 역할 정의', '[가상] 실험 매뉴얼 5종 수집, RAG 청크 기준 합의. 참석 4명.', '김점검'),
   (g1, '2026-08-12', '15:00', '17:00', '자연과학대학 352호', '2차 코칭(제작) — 피드백 에이전트 제작', '[가상] n8n 워크플로우 초안 완성, 채점 루브릭 연동.', '김점검'),
@@ -409,9 +355,10 @@ begin
   (g2, '2026-08-06', '10:00', '11:30', 'Zoom', '2차 회의 — 챗봇 프로토타입 점검', '[가상] 오답 응답 사례 정리.', '이점검'),
   (g2, '2026-08-20', '10:00', '11:30', 'Zoom', '3차 회의 — 파일럿 결과', '[가상] 1학년 20명 사용, 만족도 4.3/5.', '이점검'),
   (g3, '2026-07-24', '14:00', '16:00', '인문대학 201호', '1차 코칭(기획) — 루브릭 설계', '[가상] 평가 항목 5개 확정.', '박점검'),
-  (g3, '2026-07-31', '14:00', '15:00', '인문대학 201호', '팀 회의 — 프롬프트 초안', '[가상] 항목별 피드백 프롬프트 초안 작성.', '박점검');
+  (g3, '2026-07-31', '14:00', '15:00', '인문대학 201호', '팀 회의 — 프롬프트 초안', '[가상] 항목별 피드백 프롬프트 초안 작성.', '박점검'),
+  (g5, '2026-07-24', '10:00', '11:00', 'Zoom', '팀 회의 — 데이터 범위', '[가상] 센서 항목 12종 선정.', '정점검');
 
-  -- 12) 결과보고서([서식 2]) + 산출물 — 1·2팀 제출, 1팀은 관리자 검토 완료
+  -- 11) 결과보고서([서식 2]) + 산출물 — 1·2팀 제출, 1팀은 관리자 검토 완료
   insert into public.study_reports (
     group_id, actual_period_start, actual_period_end,
     section1_background, section2_topic_purpose, section3_operation, section4_result_use, section5_effect_suggestion,
@@ -436,13 +383,7 @@ begin
   update public.study_groups set status = 'report_submitted' where id in (g1, g2);
   update public.study_groups set status = 'completed' where id = g1;              -- 이수확정 큐
 
-  -- 13) 심사기준 1번 근거 — 참여·이수 이력 수기 대장
-  insert into public.study_prior_participations (name, id_number, phone, program_name, program_year, completed, note, created_by) values
-  ('김점검', 'T90101', '', '[가상] 생성형 AI 실무과정 특강', 2026, true, '[점검 가상자료]', '[점검]'),
-  ('이점검', 'T90201', '', '[가상] 생성형 AI 실무과정 특강', 2026, false, '[점검 가상자료]', '[점검]'),
-  ('박점검', '', '010-0000-0301', '[가상] AI 교수법 워크숍', 2025, true, '[점검 가상자료]', '[점검]');
-
-  -- 14) 안내 메일 큐 정리 — 트리거가 만든 가상 행에 표식을 붙이고,
+  -- 12) 안내 메일 큐 정리 — 트리거가 만든 가상 행에 표식을 붙이고,
   --     지난 단계는 '발송 완료'로, 최신 단계 일부만 '대기'로 남겨 승인 흐름을 시연한다.
   update public.study_notifications n
   set subject = '[점검·가상] ' || n.subject
@@ -460,9 +401,9 @@ begin
   where g.id = n.group_id and g.round_id = v_round
     and n.status = '대기'
     and not (n.stage = '이수확정')                          -- 1팀 이수확정: 대기(승인 시연)
-    and not (n.stage = '접수확인' and g.id = g7);          -- 7팀 접수확인: 대기(승인 시연)
+    and not (n.stage = '심사결과' and g.id = g4);          -- 4팀 선발 안내: 대기(승인 시연)
 
-  -- 15) 입력 완료 — 회차를 표시용 가상 일정으로 되돌린다
+  -- 13) 입력 완료 — 회차를 표시용 가상 일정으로 되돌린다
   update public.study_rounds
   set apply_open_at = '2026-07-01T09:00:00+09:00',
       apply_close_at = '2026-07-10T18:00:00+09:00',
@@ -471,7 +412,7 @@ begin
       expert_apply_close_at = '2026-07-10T18:00:00+09:00'
   where id = v_round;
 
-  raise notice '[점검] 시스템 점검 회차 입력 완료 — 연구모임 9팀, 전문가 3명.';
+  raise notice '[점검] 시스템 점검 회차 입력 완료 — 연구모임 5팀(선발 이후), 전문가 2명.';
 end;
 $$;
 
