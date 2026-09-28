@@ -5,13 +5,18 @@ import { TABLES } from "./db-tables";
 import { extractFunctionError } from "./functionError";
 import { formatPhone } from "./format";
 import { countChars } from "./studyValidation";
-import type { StudyMemberInput, StudyPlanAdminInput } from "./studyValidation";
+import type {
+  StudyFinalScheduleInput,
+  StudyMemberInput,
+  StudyPlanAdminInput,
+} from "./studyValidation";
 import type {
   StudyCoachingMemo,
   StudyCoachingSession,
   StudyEthicsPledgeRecord,
   StudyExpertApplication,
   StudyExpertStatus,
+  StudyFinalSchedule,
   StudyGroup,
   StudyGroupMember,
   StudyGroupPlan,
@@ -89,7 +94,8 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
     new Set(rows.map((g) => g.expert_id).filter((v): v is string => Boolean(v)))
   );
 
-  const [members, plans, reports, meetings, outputs, sessions, memos, experts] = await Promise.all([
+  const [members, plans, reports, meetings, outputs, sessions, memos, experts, schedules] =
+    await Promise.all([
     supabase.from(TABLES.STUDY_GROUP_MEMBERS).select("*").in("group_id", ids).order("sort_order"),
     supabase.from(TABLES.STUDY_GROUP_PLANS).select("*").in("group_id", ids),
     supabase.from(TABLES.STUDY_REPORTS).select("*").in("group_id", ids),
@@ -109,6 +115,7 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
     expertIds.length > 0
       ? supabase.from(TABLES.STUDY_EXPERT_APPLICATIONS).select("*").in("id", expertIds)
       : Promise.resolve({ data: [] as StudyExpertApplication[] }),
+    supabase.from(TABLES.STUDY_FINAL_SCHEDULES).select("*").in("group_id", ids),
   ]);
 
   const group = <T extends { group_id: string }>(list: T[] | null) => {
@@ -131,6 +138,7 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
   const expertsBy = new Map(
     ((experts.data ?? []) as StudyExpertApplication[]).map((e) => [e.id, e])
   );
+  const schedulesBy = group(schedules.data as StudyFinalSchedule[] | null);
 
   return rows.map((g) => ({
     ...g,
@@ -142,7 +150,55 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
     expert: (g.expert_id ? expertsBy.get(g.expert_id) : null) ?? null,
     coachingSessions: sessionsBy.get(g.id) ?? [],
     coachingMemos: memosBy.get(g.id) ?? [],
+    finalSchedule: schedulesBy.get(g.id)?.[0] ?? null,
   }));
+}
+
+/**
+ * 팀별 최종 일정·전문가 배정 결과 저장(0027). 없으면 만들고 있으면 덮어쓴다(팀당 1행).
+ * updated_by에는 로그인한 관리자 이메일을 남겨 누가 마지막으로 고쳤는지 상세 화면에 보여 준다.
+ */
+export async function upsertStudyFinalSchedule(
+  groupId: string,
+  input: StudyFinalScheduleInput
+): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const updatedBy = session?.user?.email ?? "";
+
+  const { error } = await supabase.from(TABLES.STUDY_FINAL_SCHEDULES).upsert(
+    {
+      group_id: groupId,
+      team_no: input.teamNo,
+      composition: input.composition,
+      expert_label: input.expertLabel,
+      step1_when: input.step1When,
+      step1_detail: input.step1Detail,
+      step2_when: input.step2When,
+      step2_detail: input.step2Detail,
+      step3_when: input.step3When,
+      step3_detail: input.step3Detail,
+      note: input.note,
+      published: input.published,
+      updated_by: updatedBy,
+    },
+    { onConflict: "group_id" }
+  );
+
+  return toAdminErrorMessage(error);
+}
+
+/** 최종 일정 공지 행 삭제 — 팀 화면의 섹션이 사라진다. */
+export async function deleteStudyFinalSchedule(groupId: string): Promise<string | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from(TABLES.STUDY_FINAL_SCHEDULES)
+    .delete()
+    .eq("group_id", groupId);
+
+  return toAdminErrorMessage(error);
 }
 
 /**

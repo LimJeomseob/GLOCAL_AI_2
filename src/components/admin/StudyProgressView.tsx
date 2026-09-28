@@ -173,13 +173,14 @@ export function StudyProgressView() {
           <section className="flex flex-col gap-3">
             <h2 className="text-base font-bold text-slate-800">팀별 진척</h2>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-              <table className="w-full min-w-[1020px] text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                     <th scope="col" className="px-3 py-3 font-semibold">접수번호</th>
                     <th scope="col" className="px-3 py-3 font-semibold">모임명</th>
                     <th scope="col" className="px-3 py-3 font-semibold">대표자</th>
                     <th scope="col" className="px-3 py-3 font-semibold">배정 전문가</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">최종일정</th>
                     <th scope="col" className="px-3 py-3 text-right font-semibold">코칭</th>
                     <th scope="col" className="px-3 py-3 text-right font-semibold">회의록</th>
                     <th scope="col" className="px-3 py-3 text-right font-semibold">산출물</th>
@@ -202,6 +203,17 @@ export function StudyProgressView() {
                             g.expert.name
                           ) : (
                             <span className="text-amber-700">미배정</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 font-semibold">
+                          {g.finalSchedule ? (
+                            g.finalSchedule.published ? (
+                              <span className="text-emerald-700">등록</span>
+                            ) : (
+                              <span className="text-slate-500">비공개</span>
+                            )
+                          ) : (
+                            <span className="text-amber-700">미등록</span>
                           )}
                         </td>
                         <td

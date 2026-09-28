@@ -25,6 +25,7 @@ export const TABLES = {
   STUDY_EXPERT_APPLICATIONS: "study_expert_applications",
   STUDY_COACHING_SESSIONS: "study_coaching_sessions",
   STUDY_COACHING_MEMOS: "study_coaching_memos",
+  STUDY_FINAL_SCHEDULES: "study_final_schedules",
 } as const;
 
 export const CERTIFICATES_BUCKET = "certificates";

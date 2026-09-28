@@ -246,6 +246,48 @@ export interface StudyLookupCoachingMemo {
   createdAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// 팀별 최종 일정 · 전문가 배정 결과 공지 (study_final_schedules, 0027)
+// 코칭 조율 기록(0026)과 별개인 공지 표. 원문 서식을 보존하는 자유 텍스트다.
+// ---------------------------------------------------------------------------
+
+/** study_final_schedules 행(관리자 경로) — 팀당 1행 */
+export interface StudyFinalSchedule {
+  group_id: string;
+  team_no: number | null;
+  composition: string;
+  expert_label: string;
+  step1_when: string;
+  step1_detail: string;
+  step2_when: string;
+  step2_detail: string;
+  step3_when: string;
+  step3_detail: string;
+  note: string;
+  published: boolean;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 조회 응답의 단계 1건 — 1 기획 / 2 제작 / 3 환류 */
+export interface StudyLookupFinalScheduleStep {
+  no: number;
+  label: string;
+  when: string;
+  detail: string;
+}
+
+/** 조회 응답(Edge Function)의 최종 일정 — camelCase. published=false면 응답에서 null */
+export interface StudyLookupFinalSchedule {
+  teamNo: number | null;
+  composition: string;
+  expertLabel: string;
+  steps: StudyLookupFinalScheduleStep[];
+  note: string;
+  updatedAt: string;
+}
+
 /** 팀 화면에 보여 주는 배정 전문가. 미배정이면 null */
 export interface StudyLookupExpert {
   name: string;
@@ -517,6 +559,8 @@ export interface StudyGroupWithRelations extends StudyGroup {
   expert: StudyExpertApplication | null;
   coachingSessions: StudyCoachingSession[];
   coachingMemos: StudyCoachingMemo[];
+  /** 최종 일정 공지 행(0027). 미등록이면 null */
+  finalSchedule: StudyFinalSchedule | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -629,6 +673,8 @@ export interface StudyLookupResult {
   expert: StudyLookupExpert | null;
   coachingSessions: StudyLookupCoachingSession[];
   coachingMemos: StudyLookupCoachingMemo[];
+  /** 팀별 최종 일정·전문가 배정 결과(0027). 미등록·비공개면 null */
+  finalSchedule: StudyLookupFinalSchedule | null;
   plan: StudyLookupPlan | null;
   meetings: StudyLookupMeeting[];
   report: StudyLookupReport | null;
