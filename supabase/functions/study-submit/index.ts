@@ -110,6 +110,19 @@ const applyEditSchema = z.object({
   consent: z.literal(true),
 });
 
+/**
+ * 참여자 명단 수정 — 선발 이후(selected·in_progress) '내 연구모임'에서 대표자가 참여자를 고친다.
+ * 신청서 전체 수정(apply-edit)은 심사 착수 전에 닫히지만, 운영 중에도 팀원 교체·연락처 보완이
+ * 필요하다. members에는 대표자를 뺀 나머지 참여자만 받는다 — 대표자 행은 서버가 study_groups의
+ * 대표자 항목으로 다시 만든다(본인확인 키인 대표자 연락처를 이 경로로 바꾸지 못하게).
+ */
+const membersEditSchema = z.object({
+  kind: z.literal("members-edit"),
+  groupId: z.string().uuid(),
+  ...identity,
+  members: z.array(memberSchema).max(20),
+});
+
 const planSchema = z.object({
   kind: z.literal("plan"),
   groupId: z.string().uuid(),
@@ -286,6 +299,7 @@ const expertCoachingMemoSchema = z.object({
 const bodySchema = z.discriminatedUnion("kind", [
   applySchema,
   applyEditSchema,
+  membersEditSchema,
   expertApplySchema,
   planSchema,
   meetingSaveSchema,
@@ -316,6 +330,13 @@ const IDENTITY_ERROR = "일치하는 연구모임이 없습니다. 대표자 성
  * 클라이언트 상수 STUDY_APPLY_EDITABLE_STATUSES(src/lib/studyApi.ts)와 같은 값이어야 한다.
  */
 const APPLY_EDITABLE_STATUSES = ["draft", "submitted"];
+
+/**
+ * 참여자 명단만 대표자가 고칠 수 있는 상태 — 선발 이후 운영 중.
+ * 클라이언트 상수 STUDY_MEMBERS_EDITABLE_STATUSES(src/lib/studyApi.ts)와 같은 값이어야 한다.
+ * 심사 중(under_review)에는 명단이 복수학과 가산점에 영향을 주므로 열지 않는다.
+ */
+const MEMBERS_EDITABLE_STATUSES = ["selected", "in_progress"];
 
 type Client = ReturnType<typeof createClient>;
 
@@ -992,6 +1013,95 @@ Deno.serve(async (req: Request) => {
       leaderName: body.newLeaderName,
       leaderPhone: body.newLeaderPhone,
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // 1-4. 참여자 명단 수정 — 선발 이후(selected·in_progress)에 대표자가 팀원을 고친다
+  // --------------------------------------------------------------------------
+  if (body.kind === "members-edit") {
+    if (!MEMBERS_EDITABLE_STATUSES.includes(group.status)) {
+      const message = APPLY_EDITABLE_STATUSES.includes(group.status)
+        ? "심사 착수 전에는 「신청서 수정」에서 참여자를 고쳐 주세요."
+        : "현재 상태에서는 참여자를 수정할 수 없습니다. 수정이 필요하면 AI융합원으로 문의해 주세요.";
+      return jsonResponse({ error: message }, 400);
+    }
+
+    const [{ data: leader, error: leaderError }, { data: round, error: roundError }] =
+      await Promise.all([
+        supabase
+          .from("study_groups")
+          .select("leader_name, leader_affiliation, leader_position, leader_id_number, leader_phone, leader_email")
+          .eq("id", body.groupId)
+          .maybeSingle(),
+        supabase
+          .from("study_rounds")
+          .select("id, min_team_size, max_team_size")
+          .eq("id", group.round_id)
+          .maybeSingle(),
+      ]);
+
+    if (leaderError || !leader || roundError || !round) {
+      return jsonResponse({ error: "연구모임 정보를 확인할 수 없습니다." }, 400);
+    }
+
+    // 대표자 행은 서버가 만든다. 연락처·이메일도 대표자 항목 값으로 채워 0025 이전 빈 값을 메운다.
+    const leaderRow: MemberInput = {
+      idNumber: leader.leader_id_number as string,
+      name: leader.leader_name as string,
+      affiliation: leader.leader_affiliation as string,
+      position: leader.leader_position as string,
+      phone: leader.leader_phone as string,
+      email: leader.leader_email as string,
+      isLeader: true,
+    };
+    const others = body.members
+      .filter((m) => m.idNumber !== leaderRow.idNumber)
+      .map((m) => ({ ...m, isLeader: false }));
+    if (others.length !== body.members.length) {
+      return jsonResponse({ error: "대표자 직(학)번과 같은 참여자가 있습니다." }, 400);
+    }
+    const roster = [leaderRow, ...others];
+
+    const rosterError = validateRoster(
+      roster,
+      round.min_team_size as number,
+      round.max_team_size as number
+    );
+    if (rosterError) return rosterError;
+
+    // 먼저 upsert로 새 명단을 확정한 뒤 빠진 행만 지운다 — 삭제 후 삽입과 달리 중간 장애에도 명단이 비지 않는다.
+    // (관리자 화면의 replaceStudyGroupMembers와 같은 순서)
+    const rows = toMemberRows(body.groupId, roster);
+    const { error: upsertError } = await supabase
+      .from("study_group_members")
+      .upsert(rows, { onConflict: "group_id,id_number" });
+
+    if (upsertError) {
+      console.error("[study-submit] 참여자 수정 실패:", upsertError);
+      return jsonResponse({ error: "참여자 저장 중 오류가 발생했습니다." }, 500);
+    }
+
+    const keep = rows.map((r) => r.id_number);
+    const { data: existing } = await supabase
+      .from("study_group_members")
+      .select("id, id_number")
+      .eq("group_id", body.groupId);
+    const removeIds = (existing ?? [])
+      .filter((m: { id_number: string }) => !keep.includes(m.id_number))
+      .map((m: { id: string }) => m.id);
+
+    if (removeIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("study_group_members")
+        .delete()
+        .in("id", removeIds);
+      if (deleteError) {
+        console.error("[study-submit] 빠진 참여자 삭제 실패:", deleteError);
+        return jsonResponse({ error: "참여자 저장 중 오류가 발생했습니다." }, 500);
+      }
+    }
+
+    return jsonResponse({ ok: true, memberCount: roster.length });
   }
 
   // --------------------------------------------------------------------------

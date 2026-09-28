@@ -51,6 +51,7 @@ export function StudyGroupSummary({
   identity,
   notice = null,
   onEditApplication,
+  onEditMembers,
 }: {
   group: StudyLookupResult;
   /** 본인확인에 쓴 신원. 조회 응답에 없는 대표자 연락처를 제출본 PDF에 싣기 위해 받는다. */
@@ -59,6 +60,8 @@ export function StudyGroupSummary({
   notice?: string | null;
   /** 주어지면 「신청서 내용」에 수정 버튼을 띄운다. 실제 허용 여부는 이 컴포넌트가 다시 판정한다. */
   onEditApplication?: () => void;
+  /** 주어지면 「참여자」에 수정 버튼을 띄운다(선발 이후 운영 중). 실제 허용 여부는 서버가 다시 판정한다. */
+  onEditMembers?: () => void;
 }) {
   const [pdfBusy, setPdfBusy] = useState<"application" | "plan" | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -311,6 +314,81 @@ export function StudyGroupSummary({
         )}
       </section>
 
+      {/* 팀별 최종 일정 · 전문가 배정 결과(0027) — AI융합원이 확정한 공지. 이 팀 것만 내려온다 */}
+      {group.finalSchedule ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+          <h2 className="text-sm font-bold text-slate-800">팀별 최종 일정 · 전문가 배정 결과</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            AI융합원이 확정한 3단계(기획·제작·환류) 일정입니다. 변경이 필요하면 AI융합원으로 문의해
+            주세요.
+          </p>
+
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-semibold text-slate-500">팀 · 구성</dt>
+              <dd className="mt-0.5 whitespace-pre-line text-slate-800">
+                {group.finalSchedule.teamNo != null && (
+                  <span className="mr-2 inline-flex rounded bg-brand/10 px-1.5 py-0.5 text-xs font-bold text-brand">
+                    {group.finalSchedule.teamNo}팀
+                  </span>
+                )}
+                {group.finalSchedule.composition || "–"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold text-slate-500">AI 전문가</dt>
+              <dd className="mt-0.5 whitespace-pre-line font-semibold text-slate-800">
+                {group.finalSchedule.expertLabel || "–"}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                  <th scope="col" className="px-3 py-2 font-semibold">단계</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">일자 및 시간</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">세부내용</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.finalSchedule.steps.map((step) => (
+                  <tr key={step.no} className="border-b border-slate-100 last:border-b-0">
+                    <td className="whitespace-nowrap px-3 py-2 align-top font-semibold text-brand">
+                      {step.no}차 · {step.label}
+                    </td>
+                    <td
+                      className={clsx(
+                        "whitespace-pre-line px-3 py-2 align-top tabular-nums",
+                        step.when ? "font-medium text-slate-800" : "text-amber-700"
+                      )}
+                    >
+                      {step.when || "미정"}
+                    </td>
+                    <td className="whitespace-pre-line px-3 py-2 align-top text-slate-600">
+                      {step.detail}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {group.finalSchedule.note && (
+            <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-slate-600">
+              ※ {group.finalSchedule.note}
+            </p>
+          )}
+        </section>
+      ) : (
+        (group.status === "selected" || group.status === "in_progress") && (
+          <p className="rounded-xl border border-dashed border-slate-300 px-5 py-4 text-sm text-slate-500">
+            팀별 최종 일정·전문가 배정 결과는 AI융합원이 등록하면 이 화면에 표시됩니다.
+          </p>
+        )
+      )}
+
       {/* 배정 전문가 · 코칭 일정 — 선발된 팀에만 의미가 있다 */}
       {(group.expert || group.coachingSessions.length > 0) && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
@@ -370,7 +448,19 @@ export function StudyGroupSummary({
 
       {/* 참여자 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-sm font-bold text-slate-800">참여자 ({group.memberCount}명)</h2>
+          {onEditMembers && (
+            <Button variant="outline" size="sm" onClick={onEditMembers} disabled={pdfBusy !== null}>
+              참여자 수정
+            </Button>
+          )}
+        </div>
+        {onEditMembers && group.members.some((m) => !m.phone || !m.email) && (
+          <p className="mt-2 text-xs text-amber-700">
+            연락처·이메일이 비어 있는 참여자가 있습니다. 「참여자 수정」에서 입력해 주세요.
+          </p>
+        )}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>

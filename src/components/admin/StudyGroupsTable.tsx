@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyGroupEditModal } from "@/components/admin/StudyGroupEditModal";
+import { StudyFinalScheduleModal } from "@/components/admin/StudyFinalScheduleModal";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { downloadPdf } from "@/lib/download";
@@ -61,6 +62,8 @@ export function StudyGroupsTable() {
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  /** 최종 일정 공지(0027) 입력 대상 */
+  const [scheduleEditId, setScheduleEditId] = useState<string | null>(null);
   const [demandOpen, setDemandOpen] = useState(false);
   /** 배정 후보 — 이 회차에서 선정된 전문가만 배정할 수 있다. */
   const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
@@ -135,6 +138,7 @@ export function StudyGroupsTable() {
   const detail = groups.find((g) => g.id === detailId) ?? null;
   // 편집 대상도 목록에서 파생해 재조회 후 최신 값을 보게 한다.
   const editTarget = groups.find((g) => g.id === editId) ?? null;
+  const scheduleTarget = groups.find((g) => g.id === scheduleEditId) ?? null;
   const demand = useMemo(() => aggregateWorkshopDemand(groups), [groups]);
 
   /**
@@ -677,6 +681,83 @@ export function StudyGroupsTable() {
               )}
             </div>
 
+            {/* 최종 일정 · 전문가 배정 결과 공지(0027) — 대표자가 '내 연구모임'에서 자기 팀 것만 본다 */}
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-700">
+                  최종 일정 · 전문가 배정 결과
+                  {detail.finalSchedule && !detail.finalSchedule.published && (
+                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                      비공개
+                    </span>
+                  )}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setScheduleEditId(detail.id);
+                    setDetailId(null);
+                  }}
+                >
+                  {detail.finalSchedule ? "일정 수정" : "일정 입력"}
+                </Button>
+              </div>
+
+              {detail.finalSchedule ? (
+                <div className="mt-2 text-xs text-slate-600">
+                  <p className="whitespace-pre-line">
+                    {detail.finalSchedule.team_no != null && (
+                      <span className="mr-2 font-semibold text-slate-700">
+                        {detail.finalSchedule.team_no}팀
+                      </span>
+                    )}
+                    {detail.finalSchedule.composition}
+                  </p>
+                  <p className="mt-1 whitespace-pre-line">
+                    <span className="font-semibold text-slate-700">AI 전문가</span>{" "}
+                    {detail.finalSchedule.expert_label || "–"}
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1" role="list">
+                    {STUDY_WORKSHOP_STEPS.map((step) => {
+                      const schedule = detail.finalSchedule!;
+                      const when =
+                        step.order === 1
+                          ? schedule.step1_when
+                          : step.order === 2
+                            ? schedule.step2_when
+                            : schedule.step3_when;
+                      const stepDetail =
+                        step.order === 1
+                          ? schedule.step1_detail
+                          : step.order === 2
+                            ? schedule.step2_detail
+                            : schedule.step3_detail;
+                      return (
+                        <li key={step.key} className="whitespace-pre-line">
+                          <span className="font-semibold text-slate-700">{step.name}</span>{" "}
+                          {when || "미정"}
+                          {stepDetail && <span className="text-slate-500"> · {stepDetail}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {detail.finalSchedule.updated_by && (
+                    <p className="mt-2 text-slate-400">
+                      마지막 수정 {detail.finalSchedule.updated_by} ·{" "}
+                      {formatDateTime(detail.finalSchedule.updated_at)}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">
+                  아직 입력하지 않았습니다. 확정표의 팀 구성·AI 전문가·기획/제작/환류 일시를 입력하면
+                  대표자 화면에 표시됩니다.
+                </p>
+              )}
+            </div>
+
             {/* 복수 학과 판정 — 자동(소속 정규화 비교)이 놓친 표기 차이는 여기서 관리자가 확정한다 */}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <label htmlFor={multiDeptSelectId} className="font-semibold text-slate-700">
@@ -822,6 +903,27 @@ export function StudyGroupsTable() {
             setError(null);
             if (roundId) await load(roundId);
             setNotice(`${savedCode} 신청 내용을 저장했습니다.`);
+            setDetailId(savedId);
+          }}
+        />
+      )}
+
+      {/* 최종 일정 · 전문가 배정 결과 입력(0027) */}
+      {scheduleTarget && (
+        <StudyFinalScheduleModal
+          key={scheduleTarget.id}
+          group={scheduleTarget}
+          onClose={() => {
+            const backId = scheduleTarget.id;
+            setScheduleEditId(null);
+            setDetailId(backId);
+          }}
+          onSaved={async (message) => {
+            const savedId = scheduleTarget.id;
+            setScheduleEditId(null);
+            setError(null);
+            if (roundId) await load(roundId);
+            setNotice(message);
             setDetailId(savedId);
           }}
         />

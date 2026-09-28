@@ -110,6 +110,7 @@ Deno.serve(async (req: Request) => {
     outputsRes,
     coachingSessionsRes,
     coachingMemosRes,
+    finalSchedulesRes,
   ] = await Promise.all([
     supabase
       .from("study_group_members")
@@ -145,6 +146,12 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .in("group_id", ids)
       .order("created_at"),
+    // 팀별 최종 일정 공지(0027) — 공개(published)된 행만 팀에 내려보낸다.
+    supabase
+      .from("study_final_schedules")
+      .select("*")
+      .in("group_id", ids)
+      .eq("published", true),
   ]);
 
   const byGroup = <T extends { group_id: string }>(rows: T[] | null) => {
@@ -164,12 +171,21 @@ Deno.serve(async (req: Request) => {
   const outputs = byGroup(outputsRes.data);
   const coachingSessions = byGroup(coachingSessionsRes.data);
   const coachingMemos = byGroup(coachingMemosRes.data);
+  const finalSchedules = byGroup(finalSchedulesRes.data);
+
+  // 공문의 교육과정 3단계. 화면 상수(STUDY_WORKSHOP_STEPS)와 이름이 같아야 한다.
+  const FINAL_STEPS = [
+    { no: 1, label: "기획" },
+    { no: 2, label: "제작" },
+    { no: 3, label: "환류" },
+  ];
 
   const results = matched.map((g: any) => {
     const round = one<any>(g.round);
     const expert = one<any>(g.expert);
     const plan = plans.get(g.id)?.[0] ?? null;
     const report = reports.get(g.id)?.[0] ?? null;
+    const finalSchedule = finalSchedules.get(g.id)?.[0] ?? null;
 
     return {
       groupId: g.id,
@@ -242,6 +258,21 @@ Deno.serve(async (req: Request) => {
         body: m.body,
         createdAt: m.created_at,
       })),
+      finalSchedule: finalSchedule
+        ? {
+            teamNo: finalSchedule.team_no,
+            composition: finalSchedule.composition,
+            expertLabel: finalSchedule.expert_label,
+            steps: FINAL_STEPS.map((step) => ({
+              no: step.no,
+              label: step.label,
+              when: finalSchedule[`step${step.no}_when`] ?? "",
+              detail: finalSchedule[`step${step.no}_detail`] ?? "",
+            })),
+            note: finalSchedule.note,
+            updatedAt: finalSchedule.updated_at,
+          }
+        : null,
       plan: plan
         ? {
             section1Topic: plan.section1_topic,

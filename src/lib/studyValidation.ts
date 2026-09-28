@@ -245,6 +245,34 @@ export const studyCoachingMemoSchema = z.object({
 
 export type StudyCoachingMemoInput = z.infer<typeof studyCoachingMemoSchema>;
 
+/**
+ * 팀별 최종 일정 · 전문가 배정 결과(관리자 입력, 0027).
+ * 일시는 자유 서식("미정", "2안 10.21(수)", 줄바꿈 포함)이라 날짜 형식을 강제하지 않는다.
+ */
+const finalScheduleText = (label: string, max: number) =>
+  z.string().trim().max(max, `${label}은(는) ${max.toLocaleString()}자 이내로 작성해 주세요.`).default("");
+
+export const studyFinalScheduleSchema = z.object({
+  teamNo: z
+    .number({ invalid_type_error: "팀 번호는 숫자로 입력해 주세요." })
+    .int("팀 번호는 정수로 입력해 주세요.")
+    .min(1, "팀 번호는 1 이상이어야 합니다.")
+    .max(99, "팀 번호는 99 이하여야 합니다.")
+    .nullable(),
+  composition: finalScheduleText("구성", 500),
+  expertLabel: finalScheduleText("AI 전문가", 500),
+  step1When: finalScheduleText("기획 일자 및 시간", 500),
+  step1Detail: finalScheduleText("기획 세부내용", 2000),
+  step2When: finalScheduleText("제작 일자 및 시간", 500),
+  step2Detail: finalScheduleText("제작 세부내용", 2000),
+  step3When: finalScheduleText("환류 일자 및 시간", 500),
+  step3Detail: finalScheduleText("환류 세부내용", 2000),
+  note: finalScheduleText("비고", 2000),
+  published: z.boolean().default(true),
+});
+
+export type StudyFinalScheduleInput = z.infer<typeof studyFinalScheduleSchema>;
+
 /** 전문가 본인확인(성명 + 연락처) — 배정 팀 조회 게이트 */
 export const studyExpertIdentitySchema = z.object({
   expertName: z.string().trim().min(1, "성명을 입력해 주세요."),

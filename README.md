@@ -29,13 +29,16 @@
     행 삭제는 여전히 관리자 포털에서만 가능
   - `supabase/functions/issue-certificate` — 본인확인 후 이수 건 수료증 발급(발급번호 채번·서식 전달)
   - `supabase/functions/study-lookup` — 대표자 성명+연락처가 일치하는 연구모임과 그 팀의 계획서·회의록·
-    결과보고서·산출물·배정 전문가·코칭 일정을 한 번에 반환(트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
+    결과보고서·산출물·배정 전문가·코칭 일정·팀별 최종 일정 공지(`0027`, 공개된 행만)를 한 번에 반환
+    (트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
   - `supabase/functions/study-expert-lookup` — **선정된** 전문가의 성명+연락처가 일치하면 그에게 배정된
     연구모임과 코칭 일정·조율 메모를 반환(`0026`). 배정 관계가 확인된 범위에서만 팀 대표자 연락처를 노출합니다.
-  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/
+  - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/members-edit/
     expert-apply/plan/meeting-save/meeting-delete/report/coaching-*/expert-coaching-*)로 갈리는 판별 유니온.
     `apply-edit`은 '내 연구모임'
-    탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `expert-apply`는 연구모임을 코칭할
+    탭에서 대표자가 저장된 신청서를 고치는 경로(심사 착수 전·신청 마감 전에만 열린다). `members-edit`은 선발 이후
+    (selected·in_progress) 같은 탭에서 **참여자 명단만** 고치는 경로로, 대표자 행은 서버가 신청서의 대표자 항목으로
+    다시 만든다(본인확인 키인 대표자 연락처는 이 경로로 바뀌지 않는다). `expert-apply`는 연구모임을 코칭할
     교내 AI활용 전문가(교원) 개인 신청(`study_expert_applications`, `0019`).
     `coaching-*`은 팀(대표자 본인확인), `expert-coaching-*`은 전문가(성명+연락처 본인확인 + 배정 확인)가
     코칭 일정을 제안·회신·확정하고 메모를 남기는 경로입니다(`0026`).
@@ -62,9 +65,12 @@
 
 ### 1. Supabase 프로젝트 준비
 1. [supabase.com](https://supabase.com) 에서 프로젝트 생성
-2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0026`)
+2. `supabase/migrations/` 의 SQL을 **파일명 번호 순서대로** 적용 (`0001` → `0028`)
    (Supabase CLI: `supabase link --project-ref <ref>` 후 `supabase db push`, 또는 대시보드 SQL Editor에서 순서대로 실행)
-   - `0001`~`0012` 특강 트랙 / `0013`~`0026` 연구모임 트랙
+   - `0001`~`0012` 특강 트랙 / `0013`~`0028` 연구모임 트랙
+   - `0027`은 팀별 최종 일정·전문가 배정 결과 공지 테이블(`study_final_schedules`), `0028`은 2026-2학기 확정표
+     시드입니다. 시드는 "회차 + 대표자 성명"으로 팀을 찾으므로 대표자 성명이 확정표와 다르거나 같은 성명의
+     팀이 둘 이상이면 건너뛰고(`raise notice`), 그 팀은 「연구모임 관리」 상세 팝업에서 직접 입력합니다.
    - `0014`는 `admin_users.role` CHECK에 `reviewer`를 추가하고 `is_admin()`을 admin/superadmin으로
      좁힙니다. 기존 관리자 행은 role이 admin/superadmin이므로 잃는 권한이 없습니다.
 3. Authentication → Sign In / Providers → **Google** 활성화
@@ -162,6 +168,10 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
     합니다. **연구모임 관리**의 상세 팝업에서 신청서·참여자·윤리 다짐·계획서를 직접 고치고,
     **전문가 신청자** 탭에서 접수 건을 추가·수정·삭제합니다. **팀-전문가 배정도 관리자만** 합니다 —
     「연구모임 관리」 상세 팝업의 `배정 전문가` 선택이며, 배정해야 팀·전문가의 코칭 일정 화면이 열립니다(`0026`).
+    같은 팝업의 **「최종 일정 · 전문가 배정 결과」**(`0027`)는 AI융합원이 확정한 공지 표(팀 구성·AI 전문가·
+    기획/제작/환류 일시와 세부내용)를 팀당 1행으로 입력하는 곳입니다. 일시는 "미정", "2안 10.21(수)"처럼 원문
+    서식을 그대로 두는 자유 텍스트이고, 외부 전문가·'개별 학습'도 그대로 적습니다(교내 전문가 배정과 별개).
+    저장하면 대표자가 「내 연구모임」에서 **자기 팀 것만** 봅니다(`study-lookup`이 공개된 행만 실어 보냄).
     두 경로 모두 Edge Function을 거치지 않고
     관리자 브라우저에서 RLS `is_admin()`으로 테이블을 직접 갱신하며(`src/lib/studyAdmin.ts`),
     접수 구간·팀 규모 검사는 DB 트리거가 관리자에게 면제합니다(`0013`·`0019`).
