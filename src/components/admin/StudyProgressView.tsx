@@ -4,8 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
-import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { StudyProgressRowEditor } from "@/components/admin/StudyProgressRowEditor";
+import { StudyFinalScheduleModal } from "@/components/admin/StudyFinalScheduleModal";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
 import {
@@ -13,10 +13,18 @@ import {
   fetchStudyGroups,
   fetchStudyRounds,
   studyGroupExpertDisplay,
+  updateStudyGroupStatus,
 } from "@/lib/studyAdmin";
-import { STUDY_COACHING_TARGET_COUNT, STUDY_MEETING_TARGET_COUNT } from "@/lib/studyGroupConstants";
 import {
+  STUDY_COACHING_TARGET_COUNT,
+  STUDY_MEETING_TARGET_COUNT,
+  STUDY_OPERATING_STATUSES,
+} from "@/lib/studyGroupConstants";
+import {
+  STUDY_GROUP_STATUSES,
   STUDY_OUTPUT_TYPES,
+  STUDY_STATUS_LABELS,
+  type StudyGroupStatus,
   type StudyExpertApplication,
   type StudyGroupWithRelations,
   type StudyRound,
@@ -24,16 +32,21 @@ import {
 
 const ALL = "__all__";
 
-/** 운영 단계에 들어선 팀만 진척 관리 대상이다. */
-const OPERATING = new Set(["selected", "in_progress", "report_submitted", "completed"]);
+/** 운영 단계 상태만 행 안에서 바꿀 수 있다 — 접수·심사 단계로 되돌리는 일은 「연구모임 관리」에서 한다. */
+const OPERATING_STATUS_OPTIONS = STUDY_GROUP_STATUSES.filter((status) =>
+  STUDY_OPERATING_STATUSES.has(status)
+);
 
 /**
- * 관리자 탭 C. 연구모임 운영현황.
+ * 관리자 탭 C. 연구모임 운영현황 — **선발 이후** 단계를 모두 다룬다.
+ * 전문가 배정·일정·상태 변경의 입력 지점은 여기 한 곳이다(「연구모임 관리」는 선발 전만).
  *
  * 세 가지를 한 화면에서 처리한다.
  *  1) 팀별 진척 매트릭스 — 미제출 팀을 눈에 띄게 해 독려 대상을 바로 고른다.
- *     행을 펼치면 전문가 배정과 3단계 일정을 그 자리에서 고친다(StudyProgressRowEditor).
+ *     행을 펼치면 전문가 배정·3단계 일정·코칭 조율 내역을 그 자리에서 보고 고친다(StudyProgressRowEditor).
+ *     확정표의 팀 구성·비고·공개 여부까지 고칠 때는 「일정 상세 입력」(StudyFinalScheduleModal).
  *     저장한 값은 대표자 '내 연구모임'·전문가 「배정 팀 확인」이 읽는 같은 데이터다.
+ *     상태(선발 → 운영중 → 결과보고 제출 → 이수완료)도 행에서 바꾼다.
  *  2) 산출물 아카이브 — 유형·팀별로 걸러 CSV로 내보내면 성과 자료집 목차가 나온다
  *  3) 이수 확정 명단 — 30만 포인트 지급 대상(참여자 전원)을 CSV로 내보낸다
  */
@@ -47,6 +60,9 @@ export function StudyProgressView() {
   /** 배정 후보 — 이 회차에서 선정된 교내 전문가(연구모임 관리 상세 팝업과 같은 기준) */
   const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** 「일정 상세 입력」 대상 — 팀 구성·비고·공개 여부까지 포함한 최종 일정 전체 폼 */
+  const [scheduleEditId, setScheduleEditId] = useState<string | null>(null);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,7 +95,7 @@ export function StudyProgressView() {
         fetchStudyGroups(id),
         fetchStudyExpertApplications(id),
       ]);
-      setGroups(all.filter((g) => OPERATING.has(g.status)));
+      setGroups(all.filter((g) => STUDY_OPERATING_STATUSES.has(g.status)));
       setExperts(expertRows.filter((e) => e.status === "selected"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "운영 현황을 불러오지 못했습니다.");
@@ -93,6 +109,61 @@ export function StudyProgressView() {
   }, [roundId, load]);
 
   const round = rounds.find((r) => r.id === roundId) ?? null;
+  // 모달 대상은 목록에서 파생해 재조회 후 최신 값을 보게 한다.
+  const scheduleTarget = groups.find((g) => g.id === scheduleEditId) ?? null;
+
+  /** 운영 단계 안에서의 상태 변경. 이수완료로 바꾸면 아래 「이수 확정 명단」에 바로 집계된다. */
+  async function handleStatusChange(group: StudyGroupWithRelations, status: string) {
+    setStatusBusyId(group.id);
+    setNotice(null);
+    setError(null);
+    const message = await updateStudyGroupStatus(group.id, status);
+    setStatusBusyId(null);
+    if (message) {
+      setError(message);
+      return;
+    }
+    setGroups((prev) =>
+      prev.map((g) => (g.id === group.id ? { ...g, status: status as StudyGroupStatus } : g))
+    );
+    setNotice(`${group.code} 상태를 "${STUDY_STATUS_LABELS[status as StudyGroupStatus]}"로 바꿨습니다.`);
+  }
+
+  /** 팀별 전문가·일정·진척 한 표 — 선발 이후 관리 자료의 원본 */
+  function exportProgress() {
+    exportRowsAsCsv(
+      groups,
+      [
+        { header: "접수번호", accessor: (g) => g.code },
+        { header: "모임명", accessor: (g) => g.name },
+        { header: "카테고리", accessor: (g) => g.category },
+        { header: "대표자", accessor: (g) => g.leader_name },
+        { header: "소속", accessor: (g) => g.leader_affiliation },
+        { header: "참여인원", accessor: (g) => g.member_count },
+        { header: "진행방법", accessor: (g) => g.progress_method ?? "" },
+        { header: "교육형태", accessor: (g) => g.education_mode ?? "" },
+        { header: "배정전문가", accessor: (g) => studyGroupExpertDisplay(g).name },
+        { header: "교내전문가", accessor: (g) => (g.expert_id ? "Y" : "N") },
+        {
+          header: "최종일정",
+          accessor: (g) =>
+            g.finalSchedule ? (g.finalSchedule.published ? "등록" : "비공개") : "미등록",
+        },
+        { header: "1차기획", accessor: (g) => g.finalSchedule?.step1_when ?? "" },
+        { header: "2차제작", accessor: (g) => g.finalSchedule?.step2_when ?? "" },
+        { header: "3차환류", accessor: (g) => g.finalSchedule?.step3_when ?? "" },
+        {
+          header: "코칭확정",
+          accessor: (g) => g.coachingSessions.filter((s) => s.status === "확정").length,
+        },
+        { header: "회의록", accessor: (g) => g.meetings.length },
+        { header: "산출물", accessor: (g) => g.outputs.length },
+        { header: "결과보고", accessor: (g) => (g.report?.submitted_at ? "Y" : "N") },
+        { header: "상태", accessor: (g) => STUDY_STATUS_LABELS[g.status] },
+      ],
+      `연구모임운영현황_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+  }
 
   /** 산출물을 팀 정보와 함께 평탄화 — 아카이브 표와 CSV가 같은 행 구조를 쓴다. */
   const outputRows = useMemo(
@@ -163,21 +234,26 @@ export function StudyProgressView() {
         <div>
           <h1 className="text-xl font-bold text-brand sm:text-2xl">연구모임 운영현황</h1>
           <p className="mt-1 text-sm text-slate-600">
-            선발된 팀의 전문가 배정·일정·회의록·산출물·결과보고서 진척을 확인합니다. 모임명을 눌러 행을
-            펼치면 전문가 배정과 일정을 수정할 수 있고, 저장하면 대표자·전문가 화면에 바로 반영됩니다.
+            선발된 팀의 전문가 배정·일정·코칭·회의록·산출물·결과보고서 진척과 상태를 관리합니다. 모임명을
+            눌러 행을 펼치면 전문가 배정과 일정을 수정할 수 있고, 저장하면 대표자·전문가 화면에 바로 반영됩니다.
             {round && ` 결과보고 마감 ${formatDate(round.report_due_at)}`}
           </p>
         </div>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-          모집회차
-          <select className={inputBaseClass} value={roundId} onChange={(e) => setRoundId(e.target.value)}>
-            {rounds.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+            모집회차
+            <select className={inputBaseClass} value={roundId} onChange={(e) => setRoundId(e.target.value)}>
+              {rounds.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button variant="outline" size="sm" onClick={exportProgress} disabled={groups.length === 0}>
+            운영현황 CSV ({groups.length})
+          </Button>
+        </div>
       </div>
 
       {notice && (
@@ -312,7 +388,19 @@ export function StudyProgressView() {
                             {reportDone ? "제출" : "미제출"}
                           </td>
                           <td className="px-3 py-3">
-                            <StudyStatusBadge status={g.status} />
+                            <select
+                              aria-label={`${g.code} 상태 변경`}
+                              className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                              value={g.status}
+                              disabled={statusBusyId !== null}
+                              onChange={(e) => void handleStatusChange(g, e.target.value)}
+                            >
+                              {OPERATING_STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>
+                                  {STUDY_STATUS_LABELS[status]}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                         </tr>
                         {expanded && (
@@ -327,6 +415,7 @@ export function StudyProgressView() {
                                   if (roundId) await load(roundId, { silent: true });
                                   setNotice(message);
                                 }}
+                                onOpenScheduleDetail={() => setScheduleEditId(g.id)}
                               />
                             </td>
                           </tr>
@@ -429,11 +518,26 @@ export function StudyProgressView() {
               </Button>
             </div>
             <p className="text-xs text-slate-500">
-              상태를 &quot;이수완료&quot;로 바꾼 팀의 참여자 전원이 30만 포인트 지급 대상으로 집계됩니다.
-              상태 변경은 「연구모임 관리」 탭에서 합니다.
+              위 표에서 상태를 &quot;이수완료&quot;로 바꾼 팀의 참여자 전원이 30만 포인트 지급 대상으로
+              집계됩니다.
             </p>
           </section>
         </>
+      )}
+
+      {/* 최종 일정 전체 입력(0027) — 팀 구성·비고·공개 여부까지. 행 펼침의 일정 칸은 이 중 단계 일정만 다룬다 */}
+      {scheduleTarget && (
+        <StudyFinalScheduleModal
+          key={scheduleTarget.id}
+          group={scheduleTarget}
+          onClose={() => setScheduleEditId(null)}
+          onSaved={async (message) => {
+            setScheduleEditId(null);
+            setError(null);
+            if (roundId) await load(roundId, { silent: true });
+            setNotice(message);
+          }}
+        />
       )}
     </div>
   );

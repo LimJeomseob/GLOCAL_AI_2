@@ -202,7 +202,7 @@ export function StudyFinalScheduleModal({ group, onClose, onSaved }: StudyFinalS
               error={errors.expertLabel}
               hint={
                 group.expert
-                  ? `현재 교내 전문가 ${group.expert.name} 연결됨 — 첫 줄 이름을 바꾸면 교내 연결이 해제됩니다. 교내 전문가 변경은 '배정 전문가'에서 하세요.`
+                  ? `현재 교내 전문가 ${group.expert.name} 연결됨 — 첫 줄 이름을 바꾸면 교내 연결이 해제됩니다. 교내 전문가 변경은 운영현황 행의 'AI 전문가 배정'에서 하세요.`
                   : "예: OOO / (소속·직위) — 외부 전문가도 그대로 적습니다. 개별 학습 팀은 '개별 학습'"
               }
             >

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyExpertAssignForm } from "@/components/admin/StudyExpertAssignForm";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { toFinalScheduleInput, upsertStudyFinalSchedule } from "@/lib/studyAdmin";
-import { STUDY_WORKSHOP_STEPS } from "@/lib/studyGroupConstants";
+import { STUDY_WORKSHOP_STEPS, studyCoachingSessionLabel } from "@/lib/studyGroupConstants";
 import {
   studyFinalScheduleTeamSchema,
   type StudyFinalScheduleTeamInput,
@@ -39,12 +39,15 @@ export function StudyProgressRowEditor({
   group,
   experts,
   onSaved,
+  onOpenScheduleDetail,
 }: {
   group: StudyGroupWithRelations;
   /** 배정 후보 — 이 회차에서 선정된 교내 전문가 */
   experts: StudyExpertApplication[];
   /** 저장 성공 후 목록을 다시 읽는다. message는 상단 안내 문구. */
   onSaved: (message: string) => Promise<void>;
+  /** 팀 구성·비고·공개 여부까지 포함한 최종 일정 전체 폼을 연다. */
+  onOpenScheduleDetail: () => void;
 }) {
   const [steps, setSteps] = useState<StudyFinalScheduleTeamInput>(() => initialSteps(group));
   const [busy, setBusy] = useState(false);
@@ -83,7 +86,7 @@ export function StudyProgressRowEditor({
 
       {schedule && !schedule.published && (
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          이 팀의 최종 일정은 비공개 상태입니다. 「연구모임 관리」 상세 팝업에서 공개로 바꿔야 대표자·전문가
+          이 팀의 최종 일정은 비공개 상태입니다. 아래 「일정 상세 입력」에서 공개로 바꿔야 대표자·전문가
           화면에 보입니다.
         </p>
       )}
@@ -96,11 +99,24 @@ export function StudyProgressRowEditor({
       {/* 3단계 일정 */}
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-bold text-slate-700">팀별 일정 (기획 · 제작 · 환류)</h3>
-          <Button size="sm" onClick={() => void saveSchedule()} disabled={busy}>
-            {busy ? "저장 중..." : "일정 저장"}
-          </Button>
+          <h3 className="text-xs font-bold text-slate-700">
+            팀별 일정 (기획 · 제작 · 환류)
+            {schedule?.team_no != null && (
+              <span className="ml-2 font-normal text-slate-500">{schedule.team_no}팀</span>
+            )}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={onOpenScheduleDetail} disabled={busy}>
+              일정 상세 입력
+            </Button>
+            <Button size="sm" onClick={() => void saveSchedule()} disabled={busy}>
+              {busy ? "저장 중..." : "일정 저장"}
+            </Button>
+          </div>
         </div>
+        <p className="mt-1 text-xs text-slate-500">
+          팀 구성·비고·공개 여부·삭제는 「일정 상세 입력」에서 다룹니다.
+        </p>
 
         <div className="mt-3 flex flex-col gap-3">
           {STUDY_WORKSHOP_STEPS.map((step) => {
@@ -138,6 +154,53 @@ export function StudyProgressRowEditor({
           </p>
         )}
       </section>
+
+      {/* 코칭 조율 내역(0026) — 팀·전문가가 잡은 일정과 메모. 관리자는 조회만 한다 */}
+      {(group.coachingSessions.length > 0 || group.coachingMemos.length > 0) && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-bold text-slate-700">코칭 조율 내역</h3>
+          {group.coachingSessions.length > 0 && (
+            <ul className="mt-2 flex flex-col gap-1 text-xs text-slate-600" role="list">
+              {group.coachingSessions.map((s) => (
+                <li key={s.id}>
+                  <span className="font-semibold text-slate-700">
+                    {studyCoachingSessionLabel(s.session_no)}
+                  </span>{" "}
+                  {formatDate(s.met_at)}
+                  {s.start_time && ` ${s.start_time.slice(0, 5)}`}
+                  {s.end_time && `~${s.end_time.slice(0, 5)}`}
+                  {s.location && ` · ${s.location}`}
+                  <span className={s.status === "확정" ? "ml-2 font-bold text-brand" : "ml-2 text-slate-500"}>
+                    {s.status}
+                  </span>
+                  {s.expert_note && <span className="ml-2 text-slate-400">({s.expert_note})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {group.coachingMemos.length > 0 && (
+            <div className="mt-3 border-t border-slate-200 pt-2">
+              <p className="text-xs font-semibold text-slate-700">조율 메모</p>
+              <ul className="mt-1 flex flex-col gap-1 text-xs text-slate-600" role="list">
+                {group.coachingMemos.map((m) => (
+                  <li key={m.id}>
+                    <span className="font-semibold text-slate-500">
+                      {m.author_role}
+                      {m.author_name && ` ${m.author_name}`}
+                    </span>{" "}
+                    {m.body}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {group.expert && (
+            <p className="mt-2 text-xs text-slate-500">
+              교내 전문가 연락처: {group.expert.phone} · {group.expert.email}
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }
