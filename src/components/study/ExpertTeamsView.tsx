@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { StudyStatusBadge } from "@/components/study/StudyStatusBadge";
 import { CoachingSchedulePanel } from "@/components/study/CoachingSchedulePanel";
+import { FinalScheduleTable } from "@/components/study/FinalScheduleTable";
 import { formatDate, formatPhoneInput } from "@/lib/format";
 import { studyExpertIdentitySchema } from "@/lib/studyValidation";
 import type { StudyCoachingProposalInput } from "@/lib/studyValidation";
@@ -297,6 +298,31 @@ export function ExpertTeamsView() {
                 </dl>
 
                 <WorkshopPreferenceHint pref={selected.workshopPref} />
+              </section>
+
+              {/* 팀별 최종 일정 — AI융합원이 운영현황에서 정한 값과 같은 데이터(대표자 화면과 동일) */}
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+                <h2 className="text-sm font-bold text-slate-800">팀별 최종 일정</h2>
+                {selected.finalSchedule ? (
+                  <>
+                    <p className="mt-1 whitespace-pre-line text-xs text-slate-500">
+                      {selected.finalSchedule.teamNo != null && `${selected.finalSchedule.teamNo}팀 · `}
+                      AI 전문가 {selected.finalSchedule.expertLabel || "–"}
+                    </p>
+                    <div className="mt-4">
+                      <FinalScheduleTable steps={selected.finalSchedule.steps} />
+                    </div>
+                    {selected.finalSchedule.note && (
+                      <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                        ※ {selected.finalSchedule.note}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">
+                    AI융합원이 최종 일정을 등록하면 이 화면에 표시됩니다.
+                  </p>
+                )}
               </section>
 
               <CoachingSchedulePanel

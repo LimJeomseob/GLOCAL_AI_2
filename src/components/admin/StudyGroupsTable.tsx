@@ -18,7 +18,7 @@ import {
 } from "@/lib/studyFormPdf";
 import {
   aggregateWorkshopDemand,
-  assignStudyGroupExpert,
+  assignStudyGroupExpertWithLabel,
   deleteStudyGroups,
   fetchStudyExpertApplications,
   fetchStudyGroups,
@@ -166,31 +166,29 @@ export function StudyGroupsTable() {
     );
   }
 
-  /** 전문가 배정. 빈 값이면 배정 해제. */
+  /**
+   * 전문가 배정. 빈 값이면 배정 해제.
+   * 운영현황과 같은 경로(assignStudyGroupExpertWithLabel)로 팀 화면 'AI 전문가' 표기까지 함께 바꾼다.
+   */
   async function handleAssignExpert(groupId: string, rawExpertId: string) {
-    const expertId = rawExpertId || null;
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const expert = rawExpertId ? (experts.find((e) => e.id === rawExpertId) ?? null) : null;
+
     setBusy(true);
     setNotice(null);
-    const message = await assignStudyGroupExpert(groupId, expertId);
+    const message = await assignStudyGroupExpertWithLabel(
+      group,
+      expert ? { kind: "listed", expert } : { kind: "none" }
+    );
     setBusy(false);
 
     if (message) {
       setError(message);
       return;
     }
-    const expert = expertId ? (experts.find((e) => e.id === expertId) ?? null) : null;
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? {
-              ...g,
-              expert_id: expertId,
-              expert_assigned_at: expertId ? new Date().toISOString() : null,
-              expert,
-            }
-          : g
-      )
-    );
+    // 최종 일정 행이 새로 생기거나 표기가 바뀌므로 목록을 다시 읽는다(상세 팝업은 목록에서 파생).
+    if (roundId) await load(roundId);
     setNotice(expert ? `전문가 ${expert.name} 님을 배정했습니다.` : "전문가 배정을 해제했습니다.");
   }
 

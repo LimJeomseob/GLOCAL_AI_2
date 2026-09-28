@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
+import { FinalScheduleTable } from "@/components/study/FinalScheduleTable";
 import { downloadPdf } from "@/lib/download";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { canEditStudyApplication, deriveNextStep, deriveStudyRoundWindow } from "@/lib/studyApi";
@@ -360,36 +361,8 @@ export function StudyGroupSummary({
             </div>
           </dl>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-                  <th scope="col" className="px-3 py-2 font-semibold">단계</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">일자 및 시간</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">세부내용</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.finalSchedule.steps.map((step) => (
-                  <tr key={step.no} className="border-b border-slate-100 last:border-b-0">
-                    <td className="whitespace-nowrap px-3 py-2 align-top font-semibold text-brand">
-                      {step.no}차 · {step.label}
-                    </td>
-                    <td
-                      className={clsx(
-                        "whitespace-pre-line px-3 py-2 align-top tabular-nums",
-                        step.when ? "font-medium text-slate-800" : "text-amber-700"
-                      )}
-                    >
-                      {step.when || "미정"}
-                    </td>
-                    <td className="whitespace-pre-line px-3 py-2 align-top text-slate-600">
-                      {step.detail}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <FinalScheduleTable steps={group.finalSchedule.steps} />
           </div>
 
           {group.finalSchedule.note && (

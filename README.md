@@ -32,7 +32,8 @@
     결과보고서·산출물·배정 전문가·코칭 일정·팀별 최종 일정 공지(`0027`, 공개된 행만)를 한 번에 반환
     (트랙 B의 모든 탭이 이 응답 하나로 화면을 그린다)
   - `supabase/functions/study-expert-lookup` — **선정된** 전문가의 성명+연락처가 일치하면 그에게 배정된
-    연구모임과 코칭 일정·조율 메모를 반환(`0026`). 배정 관계가 확인된 범위에서만 팀 대표자 연락처를 노출합니다.
+    연구모임과 코칭 일정·조율 메모(`0026`), 팀별 최종 일정(`0027`, 공개된 행만)을 반환. 배정 관계가 확인된 범위에서만
+    팀 대표자 연락처를 노출합니다.
   - `supabase/functions/study-submit` — 트랙 B **공개 쓰기의 유일한 경로**. `kind`(apply/apply-edit/members-edit/final-schedule-save/
     expert-apply/plan/meeting-save/meeting-delete/report/coaching-*/expert-coaching-*)로 갈리는 판별 유니온.
     `apply-edit`은 '내 연구모임'
@@ -173,6 +174,12 @@ npm run build && npm run preview   # http://localhost:3000 (out/ 디렉터리를
     기획/제작/환류 일시와 세부내용)를 팀당 1행으로 입력하는 곳입니다. 일시는 "미정", "2안 10.21(수)"처럼 원문
     서식을 그대로 두는 자유 텍스트이고, 외부 전문가·'개별 학습'도 그대로 적습니다(교내 전문가 배정과 별개).
     저장하면 대표자가 「내 연구모임」에서 **자기 팀 것만** 봅니다(`study-lookup`이 공개된 행만 실어 보냄).
+    **「연구모임 운영현황」**에서 모임명을 눌러 행을 펼치면 **전문가 배정**과 **3단계 일정**을 그 자리에서 고칩니다.
+    전문가 배정은 어느 화면에서 하든 `assignStudyGroupExpertWithLabel`(`src/lib/studyAdmin.ts`) 한 경로로 저장되어
+    교내 연결(`expert_id`)과 팀 화면 'AI 전문가' 표기(`expert_label`)가 함께 바뀝니다 — 목록의 교내 전문가를
+    고르면 둘 다 설정(전문가 「배정 팀 확인」에도 팀이 나타남), '직접 입력'(외부 전문가)은 표기만 바꾸고
+    `expert_id`는 해제합니다. 전문가 「배정 팀 확인」도 같은 최종 일정을 보여 줍니다(`study-expert-lookup` 응답의
+    `finalSchedule`).
     두 경로 모두 Edge Function을 거치지 않고
     관리자 브라우저에서 RLS `is_admin()`으로 테이블을 직접 갱신하며(`src/lib/studyAdmin.ts`),
     접수 구간·팀 규모 검사는 DB 트리거가 관리자에게 면제합니다(`0013`·`0019`).
