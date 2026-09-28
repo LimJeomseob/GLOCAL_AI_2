@@ -56,8 +56,9 @@ function StudyLookupBody({
       <StudyMembersEditForm
         group={group}
         identity={identity}
-        onSaved={async () => {
-          await refresh();
+        onSaved={async (next) => {
+          // 대표자 성명·연락처가 바뀌었을 수 있으므로 새 신원으로 다시 조회한다.
+          await refresh(next);
           setEditingMembers(false);
           setNotice("참여자 명단을 수정했습니다.");
         }}

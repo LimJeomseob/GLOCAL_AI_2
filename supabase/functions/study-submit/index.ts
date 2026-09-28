@@ -114,12 +114,17 @@ const applyEditSchema = z.object({
  * 참여자 명단 수정 — 선발 이후(selected·in_progress) '내 연구모임'에서 대표자가 참여자를 고친다.
  * 신청서 전체 수정(apply-edit)은 심사 착수 전에 닫히지만, 운영 중에도 팀원 교체·연락처 보완이
  * 필요하다. members에는 대표자를 뺀 나머지 참여자만 받는다 — 대표자 행은 서버가 study_groups의
- * 대표자 항목으로 다시 만든다(본인확인 키인 대표자 연락처를 이 경로로 바꾸지 못하게).
+ * 대표자 항목으로 다시 만든다.
+ *
+ * leader를 보내면 대표자 항목(study_groups.leader_*)도 함께 고친다. identity(leaderName/leaderPhone)는
+ * apply-edit과 같이 본인확인용 "현재" 값이고, 새 성명·연락처는 leader.name/leader.phone으로 받는다.
+ * leader가 없으면(옛 화면) 대표자 항목은 그대로 둔다.
  */
 const membersEditSchema = z.object({
   kind: z.literal("members-edit"),
   groupId: z.string().uuid(),
   ...identity,
+  leader: memberSchema.omit({ isLeader: true }).optional(),
   members: z.array(memberSchema).max(20),
 });
 
@@ -1065,15 +1070,18 @@ Deno.serve(async (req: Request) => {
     }
 
     // 대표자 행은 서버가 만든다. 연락처·이메일도 대표자 항목 값으로 채워 0025 이전 빈 값을 메운다.
-    const leaderRow: MemberInput = {
-      idNumber: leader.leader_id_number as string,
-      name: leader.leader_name as string,
-      affiliation: leader.leader_affiliation as string,
-      position: leader.leader_position as string,
-      phone: leader.leader_phone as string,
-      email: leader.leader_email as string,
-      isLeader: true,
-    };
+    // 화면이 대표자 수정값(body.leader)을 보냈으면 그 값으로, 아니면 저장된 대표자 항목으로 만든다.
+    const leaderRow: MemberInput = body.leader
+      ? { ...body.leader, isLeader: true }
+      : {
+          idNumber: leader.leader_id_number as string,
+          name: leader.leader_name as string,
+          affiliation: leader.leader_affiliation as string,
+          position: leader.leader_position as string,
+          phone: leader.leader_phone as string,
+          email: leader.leader_email as string,
+          isLeader: true,
+        };
     const others = body.members
       .filter((m) => m.idNumber !== leaderRow.idNumber)
       .map((m) => ({ ...m, isLeader: false }));
@@ -1088,6 +1096,33 @@ Deno.serve(async (req: Request) => {
       round.max_team_size as number
     );
     if (rosterError) return rosterError;
+
+    // 대표자 항목을 명단보다 먼저 고친다. 상태 조건을 다시 걸어 조회-갱신 사이의 경합에서 안전하게
+    // 실패시킨다(apply-edit과 같은 방식). 성명·연락처가 바뀌면 다음 조회부터 새 값으로 본인확인한다.
+    if (body.leader) {
+      const { data: updated, error: leaderUpdateError } = await supabase
+        .from("study_groups")
+        .update({
+          leader_name: leaderRow.name,
+          leader_affiliation: leaderRow.affiliation,
+          leader_position: leaderRow.position,
+          leader_id_number: leaderRow.idNumber,
+          leader_phone: leaderRow.phone,
+          leader_email: leaderRow.email,
+        })
+        .eq("id", body.groupId)
+        .in("status", MEMBERS_EDITABLE_STATUSES)
+        .select("id")
+        .maybeSingle();
+
+      if (leaderUpdateError) {
+        console.error("[study-submit] 대표자 수정 실패:", leaderUpdateError);
+        return jsonResponse({ error: "대표자 저장 중 오류가 발생했습니다." }, 500);
+      }
+      if (!updated) {
+        return jsonResponse({ error: "상태가 변경되었습니다. 다시 조회해 주세요." }, 400);
+      }
+    }
 
     // 먼저 upsert로 새 명단을 확정한 뒤 빠진 행만 지운다 — 삭제 후 삽입과 달리 중간 장애에도 명단이 비지 않는다.
     // (관리자 화면의 replaceStudyGroupMembers와 같은 순서)
@@ -1121,7 +1156,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return jsonResponse({ ok: true, memberCount: roster.length });
+    return jsonResponse({
+      ok: true,
+      memberCount: roster.length,
+      leaderName: leaderRow.name,
+      leaderPhone: leaderRow.phone,
+    });
   }
 
   // --------------------------------------------------------------------------
