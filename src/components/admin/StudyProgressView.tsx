@@ -7,7 +7,7 @@ import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyProgressRowEditor } from "@/components/admin/StudyProgressRowEditor";
 import { StudyFinalScheduleModal } from "@/components/admin/StudyFinalScheduleModal";
 import { exportRowsAsCsv } from "@/lib/csv";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPhone } from "@/lib/format";
 import {
   fetchStudyExpertApplications,
   fetchStudyGroups,
@@ -58,6 +58,8 @@ export function StudyProgressView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [outputTypeFilter, setOutputTypeFilter] = useState<string>(ALL);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantStatusFilter, setParticipantStatusFilter] = useState<string>(ALL);
   /** 배정 후보 — 이 회차 등록 전문가(외부 포함, 미선정·취소 제외). 배정하면 선정으로 바뀐다. */
   const [experts, setExperts] = useState<StudyExpertApplication[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -192,6 +194,39 @@ export function StudyProgressView() {
     [groups]
   );
 
+  /** 선발 이후 전 팀의 참여자 전원 — 검색·상태 필터 적용 */
+  const participantRows = useMemo(() => {
+    const q = participantQuery.trim().toLowerCase();
+    return groups
+      .filter((g) => participantStatusFilter === ALL || g.status === participantStatusFilter)
+      .flatMap((g) => g.members.map((m) => ({ group: g, member: m })))
+      .filter(
+        ({ member }) =>
+          q === "" || [member.name, member.affiliation].some((v) => v.toLowerCase().includes(q))
+      );
+  }, [groups, participantQuery, participantStatusFilter]);
+
+  function exportParticipants() {
+    exportRowsAsCsv(
+      participantRows.map((r, i) => ({ ...r, no: i + 1 })),
+      [
+        { header: "연번", accessor: (r) => r.no },
+        { header: "접수번호", accessor: (r) => r.group.code },
+        { header: "모임명", accessor: (r) => r.group.name },
+        { header: "카테고리", accessor: (r) => r.group.category },
+        { header: "성명", accessor: (r) => r.member.name },
+        { header: "소속", accessor: (r) => r.member.affiliation },
+        { header: "직급", accessor: (r) => r.member.position },
+        { header: "직번", accessor: (r) => r.member.id_number },
+        { header: "연락처", accessor: (r) => formatPhone(r.member.phone) },
+        { header: "이메일", accessor: (r) => r.member.email },
+        { header: "대표자여부", accessor: (r) => (r.member.is_leader ? "Y" : "N") },
+        { header: "팀 상태", accessor: (r) => STUDY_STATUS_LABELS[r.group.status] },
+      ],
+      `연구모임참여자_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+  }
+
   function exportOutputs() {
     exportRowsAsCsv(
       outputRows,
@@ -251,7 +286,15 @@ export function StudyProgressView() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
             모집회차
-            <select className={inputBaseClass} value={roundId} onChange={(e) => setRoundId(e.target.value)}>
+            <select
+              className={inputBaseClass}
+              value={roundId}
+              onChange={(e) => {
+                setRoundId(e.target.value);
+                setParticipantQuery("");
+                setParticipantStatusFilter(ALL);
+              }}
+            >
               {rounds.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.title}
@@ -444,6 +487,97 @@ export function StudyProgressView() {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          {/* 1-2) 전체 참여자 현황 */}
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 className="text-base font-bold text-slate-800">
+                참여자 현황 ({participantRows.length}명)
+              </h2>
+              <div className="flex flex-wrap items-end gap-2">
+                <input
+                  type="search"
+                  className={inputBaseClass}
+                  placeholder="성명·소속 검색"
+                  aria-label="참여자 성명·소속 검색"
+                  value={participantQuery}
+                  onChange={(e) => setParticipantQuery(e.target.value)}
+                />
+                <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                  팀 상태
+                  <select
+                    className={inputBaseClass}
+                    value={participantStatusFilter}
+                    onChange={(e) => setParticipantStatusFilter(e.target.value)}
+                  >
+                    <option value={ALL}>전체</option>
+                    {OPERATING_STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {STUDY_STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportParticipants}
+                  disabled={participantRows.length === 0}
+                >
+                  참여자 현황 CSV
+                </Button>
+              </div>
+            </div>
+
+            {participantRows.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+                조건에 맞는 참여자가 없습니다.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="w-full min-w-[1100px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                      <th scope="col" className="px-3 py-3 font-semibold">연번</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">접수번호</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">모임명</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">카테고리</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">성명</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">소속</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">직급</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">직번</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">연락처</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">이메일</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">대표자</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {participantRows.map(({ group, member }, i) => (
+                      <tr key={member.id} className="border-b border-slate-100 last:border-0">
+                        <td className="px-3 py-2 text-slate-500">{i + 1}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-500">{group.code}</td>
+                        <td className="px-3 py-2 font-semibold text-slate-800">{group.name}</td>
+                        <td className="px-3 py-2">{group.category}</td>
+                        <td className="px-3 py-2 font-semibold">{member.name}</td>
+                        <td className="px-3 py-2">{member.affiliation}</td>
+                        <td className="px-3 py-2">{member.position}</td>
+                        <td className="px-3 py-2">{member.id_number}</td>
+                        <td className="px-3 py-2">{member.phone ? formatPhone(member.phone) : "—"}</td>
+                        <td className="px-3 py-2 break-all">{member.email || "—"}</td>
+                        <td className="px-3 py-2">
+                          {member.is_leader && (
+                            <span className="text-xs font-semibold text-brand">대표</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">{STUDY_STATUS_LABELS[group.status]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           {/* 2) 산출물 아카이브 */}
