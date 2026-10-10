@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
+import { StudyCoachingHistory } from "@/components/admin/StudyCoachingHistory";
 import { StudyExpertAssignForm } from "@/components/admin/StudyExpertAssignForm";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { toFinalScheduleInput, upsertStudyFinalSchedule } from "@/lib/studyAdmin";
-import { STUDY_WORKSHOP_STEPS, studyCoachingSessionLabel } from "@/lib/studyGroupConstants";
+import { STUDY_WORKSHOP_STEPS } from "@/lib/studyGroupConstants";
 import {
   studyFinalScheduleTeamSchema,
   type StudyFinalScheduleTeamInput,
@@ -155,52 +156,7 @@ export function StudyProgressRowEditor({
         )}
       </section>
 
-      {/* 코칭 조율 내역(0026) — 팀·전문가가 잡은 일정과 메모. 관리자는 조회만 한다 */}
-      {(group.coachingSessions.length > 0 || group.coachingMemos.length > 0) && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="text-xs font-bold text-slate-700">코칭 조율 내역</h3>
-          {group.coachingSessions.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 text-xs text-slate-600" role="list">
-              {group.coachingSessions.map((s) => (
-                <li key={s.id}>
-                  <span className="font-semibold text-slate-700">
-                    {studyCoachingSessionLabel(s.session_no)}
-                  </span>{" "}
-                  {formatDate(s.met_at)}
-                  {s.start_time && ` ${s.start_time.slice(0, 5)}`}
-                  {s.end_time && `~${s.end_time.slice(0, 5)}`}
-                  {s.location && ` · ${s.location}`}
-                  <span className={s.status === "확정" ? "ml-2 font-bold text-brand" : "ml-2 text-slate-500"}>
-                    {s.status}
-                  </span>
-                  {s.expert_note && <span className="ml-2 text-slate-400">({s.expert_note})</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {group.coachingMemos.length > 0 && (
-            <div className="mt-3 border-t border-slate-200 pt-2">
-              <p className="text-xs font-semibold text-slate-700">조율 메모</p>
-              <ul className="mt-1 flex flex-col gap-1 text-xs text-slate-600" role="list">
-                {group.coachingMemos.map((m) => (
-                  <li key={m.id}>
-                    <span className="font-semibold text-slate-500">
-                      {m.author_role}
-                      {m.author_name && ` ${m.author_name}`}
-                    </span>{" "}
-                    {m.body}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {group.expert && (
-            <p className="mt-2 text-xs text-slate-500">
-              배정 전문가 연락처: {group.expert.phone} · {group.expert.email}
-            </p>
-          )}
-        </section>
-      )}
+      <StudyCoachingHistory group={group} />
     </div>
   );
 }

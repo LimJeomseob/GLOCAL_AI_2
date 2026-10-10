@@ -154,6 +154,19 @@ export async function fetchStudyGroups(roundId: string): Promise<StudyGroupWithR
   }));
 }
 
+/** 한 팀의 회의록 전문 — 목록 조회(fetchStudyGroups)는 본문을 빼고 읽으므로 상세 모달에서 따로 읽는다. */
+export async function fetchStudyMeetingsByGroup(groupId: string): Promise<StudyMeeting[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from(TABLES.STUDY_MEETINGS)
+    .select("*")
+    .eq("group_id", groupId)
+    .order("met_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudyMeeting[];
+}
+
 /**
  * 팀별 최종 일정·전문가 배정 결과 저장(0027). 없으면 만들고 있으면 덮어쓴다(팀당 1행).
  * updated_by에는 로그인한 관리자 이메일을 남겨 누가 마지막으로 고쳤는지 상세 화면에 보여 준다.

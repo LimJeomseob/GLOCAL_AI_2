@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/Button";
 import { inputBaseClass } from "@/components/ui/FormField";
 import { StudyProgressRowEditor } from "@/components/admin/StudyProgressRowEditor";
 import { StudyFinalScheduleModal } from "@/components/admin/StudyFinalScheduleModal";
+import {
+  StudyProgressDetailModal,
+  type StudyProgressDetailTab,
+} from "@/components/admin/StudyProgressDetailModal";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDate, formatPhone } from "@/lib/format";
 import {
@@ -33,6 +37,10 @@ import {
 
 const ALL = "__all__";
 
+/** 팀별 진척의 코칭·회의록·결과보고서 칸 — 누르면 상세 모달. 칸의 글자색은 td가 정한다 */
+const DETAIL_CELL_BUTTON_CLASS =
+  "rounded px-1 -mx-1 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent";
+
 /** 운영 단계 상태만 행 안에서 바꿀 수 있다 — 접수·심사 단계로 되돌리는 일은 「연구모임 관리」에서 한다. */
 const OPERATING_STATUS_OPTIONS = STUDY_GROUP_STATUSES.filter((status) =>
   STUDY_OPERATING_STATUSES.has(status)
@@ -48,6 +56,7 @@ const OPERATING_STATUS_OPTIONS = STUDY_GROUP_STATUSES.filter((status) =>
  *     확정표의 팀 구성·비고·공개 여부까지 고칠 때는 「일정 상세 입력」(StudyFinalScheduleModal).
  *     저장한 값은 대표자 '내 연구모임'·전문가 「배정 팀 확인」이 읽는 같은 데이터다.
  *     상태(선발 → 운영중 → 결과보고 제출 → 이수완료)도 행에서 바꾼다.
+ *     코칭·회의록·결과보고서 칸을 누르면 그 내용 전문을 상세 모달(StudyProgressDetailModal)로 본다.
  *  2) 산출물 아카이브 — 유형·팀별로 걸러 CSV로 내보내면 성과 자료집 목차가 나온다
  *  3) 이수 확정 명단 — 30만 포인트 지급 대상(참여자 전원)을 CSV로 내보낸다
  */
@@ -66,6 +75,10 @@ export function StudyProgressView() {
   /** 「일정 상세 입력」 대상 — 팀 구성·비고·공개 여부까지 포함한 최종 일정 전체 폼 */
   const [scheduleEditId, setScheduleEditId] = useState<string | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  /** 코칭·회의록·결과보고서 칸 클릭 — 읽기 전용 상세 모달 */
+  const [detail, setDetail] = useState<{ groupId: string; tab: StudyProgressDetailTab } | null>(
+    null
+  );
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -114,6 +127,7 @@ export function StudyProgressView() {
   const round = rounds.find((r) => r.id === roundId) ?? null;
   // 모달 대상은 목록에서 파생해 재조회 후 최신 값을 보게 한다.
   const scheduleTarget = groups.find((g) => g.id === scheduleEditId) ?? null;
+  const detailTarget = detail ? (groups.find((g) => g.id === detail.groupId) ?? null) : null;
 
   /** 운영 단계 안에서의 상태 변경. 이수완료로 바꾸면 아래 「이수 확정 명단」에 바로 집계된다. */
   async function handleStatusChange(group: StudyGroupWithRelations, status: string) {
@@ -293,6 +307,7 @@ export function StudyProgressView() {
                 setRoundId(e.target.value);
                 setParticipantQuery("");
                 setParticipantStatusFilter(ALL);
+                setDetail(null);
               }}
             >
               {rounds.map((r) => (
@@ -421,10 +436,17 @@ export function StudyProgressView() {
                                 : "text-emerald-700"
                             )}
                           >
-                            {coachingDone}
-                            <span className="ml-0.5 text-xs font-normal text-slate-400">
-                              /{STUDY_COACHING_TARGET_COUNT}
-                            </span>
+                            <button
+                              type="button"
+                              aria-label={`${g.code} 코칭 내역 보기`}
+                              className={DETAIL_CELL_BUTTON_CLASS}
+                              onClick={() => setDetail({ groupId: g.id, tab: "coaching" })}
+                            >
+                              {coachingDone}
+                              <span className="ml-0.5 text-xs font-normal text-slate-400">
+                                /{STUDY_COACHING_TARGET_COUNT}
+                              </span>
+                            </button>
                           </td>
                           <td
                             className={clsx(
@@ -432,10 +454,17 @@ export function StudyProgressView() {
                               meetingShort ? "text-amber-700" : "text-emerald-700"
                             )}
                           >
-                            {g.meetings.length}
-                            <span className="ml-0.5 text-xs font-normal text-slate-400">
-                              /{STUDY_MEETING_TARGET_COUNT}
-                            </span>
+                            <button
+                              type="button"
+                              aria-label={`${g.code} 회의록 보기`}
+                              className={DETAIL_CELL_BUTTON_CLASS}
+                              onClick={() => setDetail({ groupId: g.id, tab: "meetings" })}
+                            >
+                              {g.meetings.length}
+                              <span className="ml-0.5 text-xs font-normal text-slate-400">
+                                /{STUDY_MEETING_TARGET_COUNT}
+                              </span>
+                            </button>
                           </td>
                           <td className="px-3 py-3 text-right tabular-nums text-slate-700">
                             {g.outputs.length}
@@ -446,7 +475,14 @@ export function StudyProgressView() {
                               reportDone ? "text-emerald-700" : "text-amber-700"
                             )}
                           >
-                            {reportDone ? "제출" : "미제출"}
+                            <button
+                              type="button"
+                              aria-label={`${g.code} 결과보고서 보기`}
+                              className={DETAIL_CELL_BUTTON_CLASS}
+                              onClick={() => setDetail({ groupId: g.id, tab: "report" })}
+                            >
+                              {reportDone ? "제출" : "미제출"}
+                            </button>
                           </td>
                           <td className="px-3 py-3">
                             <select
@@ -675,6 +711,15 @@ export function StudyProgressView() {
             </p>
           </section>
         </>
+      )}
+
+      {detail && detailTarget && (
+        <StudyProgressDetailModal
+          group={detailTarget}
+          tab={detail.tab}
+          onTabChange={(tab) => setDetail({ groupId: detailTarget.id, tab })}
+          onClose={() => setDetail(null)}
+        />
       )}
 
       {/* 최종 일정 전체 입력(0027) — 팀 구성·비고·공개 여부까지. 행 펼침의 일정 칸은 이 중 단계 일정만 다룬다 */}
